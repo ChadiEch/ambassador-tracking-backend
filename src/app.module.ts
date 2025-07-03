@@ -31,17 +31,15 @@ import { AmbassadorActivity } from './entities/ambassador-activity.entity';
     HttpModule,
 
     // TypeORM PostgreSQL connection
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: 'Good@29072004',
-      database: 'ambassador_tracker',
-      entities: [AmbassadorActivity], // manually declare entity if autoLoad is off
-      synchronize: true, // ❗ set false in production
-      autoLoadEntities: true,
-    }),
+TypeOrmModule.forRootAsync({
+  useFactory: () => ({
+    type: 'postgres',
+    url: process.env.DATABASE_URL,
+    autoLoadEntities: true,
+    synchronize: true, // false for prod!
+  }),
+}),
+
 
     // Feature Modules
     AuthModule,
