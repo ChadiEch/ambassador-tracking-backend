@@ -15,10 +15,10 @@ async function bootstrap() {
     credentials: true,
   });
 
-const port = process.env.PORT || 5000;
-await app.listen(port, '0.0.0.0');
-
-  console.log('CORS enabled. Listening on port', port);
+  const port = process.env.PORT || 5000;
+  // CRITICAL: Listen on 0.0.0.0, not localhost
+  await app.listen(port, '0.0.0.0');
+  console.log('CORS enabled, listening on', port);
 }
 
 bootstrap();
