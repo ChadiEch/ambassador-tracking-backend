@@ -73,10 +73,7 @@ export class InstagramWebhookController {
   @Post()
 async handleWebhook(@Body() body: any) {
   console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
-  console.log('✅ Webhook handler hit');
-  console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
-  return 'ok';
-  
+
   if (body?.entry) {
     for (const entry of body.entry) {
       const changes = entry.changes || [];
