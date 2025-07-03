@@ -70,28 +70,35 @@ export class InstagramWebhookController {
     return 'Invalid verify token';
   }
 
-  @Post()
+@Post()
 async handleWebhook(@Body() body: any) {
+  console.log('✅ Webhook handler hit');
   console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
+  return 'ok';
+}
 
-  if (body?.entry) {
-    for (const entry of body.entry) {
-      const changes = entry.changes || [];
-      for (const change of changes) {
-        if (change.field === 'mentions') {
-          const mediaId = change.value.media_id;
-          const fromUsername = change.value.from?.username; // Ambassador's username
-          const brandMentionedId = change.value.mentioned_user_id; // This should be your brand's IG ID
+//   @Post()
+// async handleWebhook(@Body() body: any) {
+//   console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
 
-          console.log(`🔍 Mention of your brand by @${fromUsername} - Media ID: ${mediaId}`);
+//   if (body?.entry) {
+//     for (const entry of body.entry) {
+//       const changes = entry.changes || [];
+//       for (const change of changes) {
+//         if (change.field === 'mentions') {
+//           const mediaId = change.value.media_id;
+//           const fromUsername = change.value.from?.username; // Ambassador's username
+//           const brandMentionedId = change.value.mentioned_user_id; // This should be your brand's IG ID
 
-          try {
-            const media = await this.fetchMediaDetails(mediaId);
-            console.log('📸 Media fetched:', media);
+//           console.log(`🔍 Mention of your brand by @${fromUsername} - Media ID: ${mediaId}`);
 
-            const user = await this.userRepo.findOne({
-              where: { instagram: fromUsername },
-            });
+//           try {
+//             const media = await this.fetchMediaDetails(mediaId);
+//             console.log('📸 Media fetched:', media);
+
+//             const user = await this.userRepo.findOne({
+//               where: { instagram: fromUsername },
+//             });
 
             const activity = new AmbassadorActivity();
             activity.mediaId = media.id;
