@@ -4,14 +4,16 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Allow all origins (public API)
+  // Allow all CORS (for testing)
   app.enableCors({
-    origin: '*',  // 🔥 Allows any origin
-    // credentials: true, // ❌ Do NOT use credentials with origin: '*'
+    origin: true,
+    credentials: true,
   });
 
-  const port = process.env.PORT || 5000;
-  await app.listen(port, '0.0.0.0');
+  // Use the port from Railway, else 5000 as fallback
+  const port = 5000;
+  await app.listen(port, '0.0.0.0');  // <-- IMPORTANT!
+  console.log(`🚀 Server running on http://0.0.0.0:${port}`);
 }
 
 bootstrap();
