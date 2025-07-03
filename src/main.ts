@@ -4,7 +4,11 @@ import { webcrypto as _crypto } from 'crypto';
 
 // Ignore TypeScript error, assign for runtime
 // @ts-ignore
-if (!globalThis.crypto) globalThis.crypto = _crypto;
+// polyfill-crypto.js
+if (!globalThis.crypto) {
+  globalThis.crypto = require('crypto').webcrypto;
+}
+
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
