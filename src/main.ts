@@ -15,7 +15,7 @@ async function bootstrap() {
 
   app.enableCors({
     origin: [
-      'https://ambassador-dashboard-production.up.railway.app:8080',
+      'https://ambassador-dashboard-production.up.railway.app',
       'http://localhost:3000',
     ],
     credentials: true,
