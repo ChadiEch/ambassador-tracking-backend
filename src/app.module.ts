@@ -34,7 +34,7 @@ import { AmbassadorActivity } from './entities/ambassador-activity.entity';
 TypeOrmModule.forRootAsync({
   useFactory: () => ({
     type: 'postgres',
-    url: process.env.DATABASE_URL,
+    url: process.env.database,
     autoLoadEntities: true,
     synchronize: true, // false for prod!
   }),
