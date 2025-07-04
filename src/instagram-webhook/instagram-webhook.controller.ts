@@ -70,7 +70,7 @@ export class InstagramWebhookController {
     return 'Invalid verify token';
   }
 
-  @Post()
+ @Post()
 async handleWebhook(@Body() body: any) {
   console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
 
@@ -80,14 +80,17 @@ async handleWebhook(@Body() body: any) {
       for (const change of changes) {
         if (change.field === 'mentions') {
           const mediaId = change.value.media_id;
-          const fromUsername = change.value.from?.username; // Ambassador's username
-          const brandMentionedId = change.value.mentioned_user_id; // This should be your brand's IG ID
-
-          console.log(`🔍 Mention of your brand by @${fromUsername} - Media ID: ${mediaId}`);
+          const fromUsername = change.value.from?.username;
+          const brandMentionedId = change.value.mentioned_user_id;
 
           try {
             const media = await this.fetchMediaDetails(mediaId);
-            console.log('📸 Media fetched:', media);
+
+            // Optional: Check for duplicate media
+            const alreadyExists = await this.activityRepo.findOne({
+              where: { mediaId },
+            });
+            if (alreadyExists) continue; // Skip duplicate
 
             const user = await this.userRepo.findOne({
               where: { instagram: fromUsername },
@@ -99,20 +102,12 @@ async handleWebhook(@Body() body: any) {
             activity.permalink = media.permalink;
             activity.timestamp = new Date(media.timestamp);
             activity.userInstagramId = fromUsername;
-            if (user) {
-              activity.user = user;
-            }
+            if (user) activity.user = user;
 
             await this.activityRepo.save(activity);
 
-            if (!user) {
-              console.warn(`⚠️ No user found with Instagram: ${fromUsername}`);
-            } else {
-              console.log(`✅ Activity assigned to user: ${user.username}`);
-            }
-
           } catch (err: any) {
-            console.error('❌ Error fetching media details or saving activity:', err.message);
+            console.error('❌ Error:', err.message);
           }
         }
       }
