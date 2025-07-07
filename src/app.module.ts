@@ -3,7 +3,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { HttpModule } from '@nestjs/axios';
-
 import { UsersModule } from './users/users.module';
 import { TeamsModule } from './teams/teams.module';
 import { TeamMembersModule } from './team-members/team-members.module';
@@ -23,13 +22,10 @@ import { AmbassadorActivity } from './entities/ambassador-activity.entity';
       isGlobal: true,
       envFilePath: '.env',
     }),
-
     // Schedule support (for cron jobs etc.)
     ScheduleModule.forRoot(),
-
     // Axios HTTP client
     HttpModule,
-
     // TypeORM PostgreSQL connection
 TypeOrmModule.forRootAsync({
   useFactory: () => ({
@@ -39,8 +35,6 @@ TypeOrmModule.forRootAsync({
     synchronize: true, // false for prod!
   }),
 }),
-
-
     // Feature Modules
     AuthModule,
     InstagramWebhookModule,
