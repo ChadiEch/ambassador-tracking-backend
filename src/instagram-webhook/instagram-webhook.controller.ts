@@ -122,7 +122,7 @@ export class InstagramWebhookController {
 
   // ========== NEW ENDPOINT FOR MESSAGE LOGGING ==========
   @Post('messages')
-  async handleMessages(@Body() body: any) {
+  async handleWebhook(@Body() body: any) {
     console.log('📩 [DM] Webhook event received:', JSON.stringify(body, null, 2));
 
     if (body?.entry) {
