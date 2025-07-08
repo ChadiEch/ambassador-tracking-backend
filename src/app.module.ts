@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { HttpModule } from '@nestjs/axios';
+
 import { UsersModule } from './users/users.module';
 import { TeamsModule } from './teams/teams.module';
 import { TeamMembersModule } from './team-members/team-members.module';
@@ -13,33 +14,23 @@ import { InstagramWebhookModule } from './instagram-webhook/instagram-webhook.mo
 import { AuthModule } from './auth/auth.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthController } from './auth/auth.controller';
-import { AmbassadorActivity } from './entities/ambassador-activity.entity';
-import { InstagramWebhookModules } from './webhooks/instagram-webhook.module';
-import { InstagramMessage } from './entities/instagram-message.entity';
 
 @Module({
   imports: [
-    // Load environment variables globally
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
-    // Schedule support (for cron jobs etc.)
     ScheduleModule.forRoot(),
-    // Axios HTTP client
     HttpModule,
-    // TypeORM PostgreSQL connection
-TypeOrmModule.forRootAsync({
-  useFactory: () => ({
-    type: 'postgres',
-    url: process.env.database,
-    autoLoadEntities: true,
-    synchronize: true, // false for prod!
-  }),
-}),
-InstagramWebhookModules,
-    // Feature Modules
-    InstagramMessage,
+    TypeOrmModule.forRootAsync({
+      useFactory: () => ({
+        type: 'postgres',
+        url: process.env.database,
+        autoLoadEntities: true,
+        synchronize: true, // false for prod!
+      }),
+    }),
     AuthModule,
     InstagramWebhookModule,
     UsersModule,
