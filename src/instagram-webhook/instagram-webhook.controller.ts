@@ -11,8 +11,16 @@ import { ConfigService } from '@nestjs/config';
 import { lastValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { AmbassadorActivity } from '../entities/ambassador-activity.entity'; // ✅ correct
+import { AmbassadorActivity } from '../entities/ambassador-activity.entity';
 import { User } from 'src/users/entities/user.entity';
+
+function mapToPluralKeys(obj: any) {
+  return {
+    stories: obj.stories ?? obj.story ?? 0,
+    posts: obj.posts ?? obj.post ?? 0,
+    reels: obj.reels ?? obj.reel ?? 0,
+  };
+}
 
 @Controller('webhook')
 export class InstagramWebhookController {
@@ -57,6 +65,52 @@ export class InstagramWebhookController {
       .getRawMany();
   }
 
+  @Get('analytics/all-compliance')
+  async getAllCompliance(@Query('start') start: string, @Query('end') end: string) {
+    // Get all ambassadors
+    const allAmbassadors = await this.userRepo.find({ where: { role: 'ambassador' } });
+
+    // For each, aggregate activity
+    const result = await Promise.all(allAmbassadors.map(async user => {
+      // Activity aggregation
+      let qb = this.activityRepo.createQueryBuilder('a')
+        .select('a.mediaType', 'mediaType')
+        .addSelect('COUNT(*)', 'count')
+        .where('a.userInstagramId = :userId', { userId: user.instagram || user.id });
+
+      if (start && end) {
+        qb = qb.andWhere('a.timestamp BETWEEN :start AND :end', { start, end });
+      }
+
+      qb = qb.groupBy('a.mediaType');
+      const actualRaw = await qb.getRawMany();
+
+      // Aggregate result to { story: N, post: M, reel: L }
+      const actualCountObj: any = {};
+      actualRaw.forEach(r => actualCountObj[r.mediaType] = parseInt(r.count, 10));
+
+      // Dummy expected, replace with your logic if needed!
+      const expectedObj = { story: 2, post: 1, reel: 1 };
+
+      // Compliance calculation (simple)
+      const compliance = {
+        story: (actualCountObj.story ?? 0) >= expectedObj.story ? 'green' : 'red',
+        post: (actualCountObj.post ?? 0) >= expectedObj.post ? 'green' : 'red',
+        reel: (actualCountObj.reel ?? 0) >= expectedObj.reel ? 'green' : 'red',
+      };
+
+      return {
+        id: user.id,
+        name: user.name,
+        actual: mapToPluralKeys(actualCountObj),
+        expected: mapToPluralKeys(expectedObj),
+        compliance,
+      };
+    }));
+
+    return result;
+  }
+
   @Get()
   verifyWebhook(@Query() query: any) {
     if (
@@ -70,81 +124,72 @@ export class InstagramWebhookController {
     return 'Invalid verify token';
   }
 
- @Post()
-async handleWebhook(@Body() body: any) {
-  console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
+  @Post()
+  async handleWebhook(@Body() body: any) {
+    console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
 
-  // --- TEMPORARY SUPPORT FOR MESSAGE WEBHOOK STORY_MENTION ---
-  if (body?.entry) {
-    for (const entry of body.entry) {
-      // 1. Handle messages webhook (story_mention)
-      if (entry.messaging) {
-        for (const messagingEvent of entry.messaging) {
-          const senderId = messagingEvent.sender?.id;
-          const timestamp = messagingEvent.timestamp ? new Date(messagingEvent.timestamp) : new Date();
-          const attachments = messagingEvent.message?.attachments || [];
+    if (body?.entry) {
+      for (const entry of body.entry) {
+        // 1. Handle messages webhook (story_mention)
+        if (entry.messaging) {
+          for (const messagingEvent of entry.messaging) {
+            const senderId = messagingEvent.sender?.id;
+            const timestamp = messagingEvent.timestamp ? new Date(messagingEvent.timestamp) : new Date();
+            const attachments = messagingEvent.message?.attachments || [];
 
-          for (const attachment of attachments) {
-            if (attachment.type === 'story_mention') {
-              const permalink = attachment.payload?.url;
-              // Try to find user by senderId or map senderId to a user/instagram
+            for (const attachment of attachments) {
+              if (attachment.type === 'story_mention') {
+                const permalink = attachment.payload?.url;
+                // Remove user lookup if you do not store numeric ID
+                const activity = new AmbassadorActivity();
+                activity.mediaType = 'story';
+                activity.permalink = permalink;
+                activity.timestamp = timestamp;
+                activity.userInstagramId = senderId;
+                await this.activityRepo.save(activity);
+                console.log('✅ Story mention saved for user:', senderId);
+              }
+            }
+          }
+        }
+
+        // 2. Fallback to your previous mentions webhook handler
+        const changes = entry.changes || [];
+        for (const change of changes) {
+          if (change.field === 'mentions') {
+            const mediaId = change.value.media_id;
+            const fromUsername = change.value.from?.username;
+            try {
+              const media = await this.fetchMediaDetails(mediaId);
+
+              // Optional: Check for duplicate media
+              const alreadyExists = await this.activityRepo.findOne({
+                where: { permalink: media.permalink },
+              });
+              if (alreadyExists) continue; // Skip duplicate
+
               const user = await this.userRepo.findOne({
-                where: { instagram: senderId } // or another field if you store it differently
+                where: { instagram: fromUsername },
               });
 
               const activity = new AmbassadorActivity();
-              activity.mediaType = 'story';
-              activity.permalink = permalink;
-              activity.timestamp = timestamp;
-              activity.userInstagramId = senderId;
+              activity.mediaType = media.media_type;
+              activity.permalink = media.permalink;
+              activity.timestamp = new Date(media.timestamp);
+              activity.userInstagramId = fromUsername;
               if (user) activity.user = user;
 
               await this.activityRepo.save(activity);
-              console.log('✅ Story mention saved for user:', senderId);
+            } catch (err: any) {
+              console.error('❌ Error:', err.message);
             }
           }
         }
       }
-
-      // 2. Fallback to your previous mentions webhook handler
-      const changes = entry.changes || [];
-      for (const change of changes) {
-        if (change.field === 'mentions') {
-          const mediaId = change.value.media_id;
-          const fromUsername = change.value.from?.username;
-          const brandMentionedId = change.value.mentioned_user_id;
-
-          try {
-            const media = await this.fetchMediaDetails(mediaId);
-
-            // Optional: Check for duplicate media
-            const alreadyExists = await this.activityRepo.findOne({
-              where: { permalink: media.permalink },
-            });
-            if (alreadyExists) continue; // Skip duplicate
-
-            const user = await this.userRepo.findOne({
-              where: { instagram: fromUsername },
-            });
-
-            const activity = new AmbassadorActivity();
-            activity.mediaType = media.media_type;
-            activity.permalink = media.permalink;
-            activity.timestamp = new Date(media.timestamp);
-            activity.userInstagramId = fromUsername;
-            if (user) activity.user = user;
-
-            await this.activityRepo.save(activity);
-          } catch (err: any) {
-            console.error('❌ Error:', err.message);
-          }
-        }
-      }
     }
-  }
 
-  return 'ok';
-}
+    return 'ok';
+  }
 
   private async fetchMediaDetails(mediaId: string) {
     const url = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/${mediaId}`;
@@ -160,3 +205,5 @@ async handleWebhook(@Body() body: any) {
     return response.data;
   }
 }
+// This controller handles Instagram webhooks for mentions and story mentions.
+// It verifies the webhook, processes incoming events, and saves ambassador activities to the database. 
