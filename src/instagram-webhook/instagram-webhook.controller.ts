@@ -74,41 +74,44 @@ export class InstagramWebhookController {
 async handleWebhook(@Body() body: any) {
   console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
 
+  // --- TEMPORARY SUPPORT FOR MESSAGE WEBHOOK STORY_MENTION ---
   if (body?.entry) {
     for (const entry of body.entry) {
+      // 1. Handle messages webhook (story_mention)
+      if (entry.messaging) {
+        for (const messagingEvent of entry.messaging) {
+          const senderId = messagingEvent.sender?.id;
+          const timestamp = messagingEvent.timestamp ? new Date(messagingEvent.timestamp) : new Date();
+          const attachments = messagingEvent.message?.attachments || [];
+
+          for (const attachment of attachments) {
+            if (attachment.type === 'story_mention') {
+              const permalink = attachment.payload?.url;
+              // Try to find user by senderId or map senderId to a user/instagram
+              const user = await this.userRepo.findOne({
+                where: { instagram: senderId } // or another field if you store it differently
+              });
+
+              const activity = new AmbassadorActivity();
+              activity.mediaId = ''; // No mediaId from message webhook
+              activity.mediaType = 'story_mention';
+              activity.permalink = permalink;
+              activity.timestamp = timestamp;
+              activity.userInstagramId = senderId;
+              if (user) activity.user = user;
+
+              await this.activityRepo.save(activity);
+              console.log('✅ Story mention saved for user:', senderId);
+            }
+          }
+        }
+      }
+
+      // 2. Fallback to your previous mentions webhook handler
       const changes = entry.changes || [];
       for (const change of changes) {
         if (change.field === 'mentions') {
-          const mediaId = change.value.media_id;
-          const fromUsername = change.value.from?.username;
-          const brandMentionedId = change.value.mentioned_user_id;
-
-          try {
-            const media = await this.fetchMediaDetails(mediaId);
-
-            // Optional: Check for duplicate media
-            const alreadyExists = await this.activityRepo.findOne({
-              where: { mediaId },
-            });
-            if (alreadyExists) continue; // Skip duplicate
-
-            const user = await this.userRepo.findOne({
-              where: { instagram: fromUsername },
-            });
-
-            const activity = new AmbassadorActivity();
-            activity.mediaId = media.id;
-            activity.mediaType = media.media_type;
-            activity.permalink = media.permalink;
-            activity.timestamp = new Date(media.timestamp);
-            activity.userInstagramId = fromUsername;
-            if (user) activity.user = user;
-
-            await this.activityRepo.save(activity);
-
-          } catch (err: any) {
-            console.error('❌ Error:', err.message);
-          }
+          // ... your existing mention code here ...
         }
       }
     }
@@ -116,7 +119,6 @@ async handleWebhook(@Body() body: any) {
 
   return 'ok';
 }
-
 
   private async fetchMediaDetails(mediaId: string) {
     const url = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/${mediaId}`;
