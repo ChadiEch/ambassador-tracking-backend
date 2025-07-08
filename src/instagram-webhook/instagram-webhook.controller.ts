@@ -38,12 +38,114 @@ export class InstagramWebhookController {
     private readonly userRepo: Repository<User>,
     @InjectRepository(InstagramMessage)
     private readonly messageRepo: Repository<InstagramMessage>,
-// <-- add this
   ) {
     this.VERIFY_TOKEN = this.configService.get<string>('META_VERIFY_TOKEN') ?? '';
     this.PAGE_ACCESS_TOKEN = this.configService.get<string>('PAGE_ACCESS_TOKEN') ?? '';
   }
 
+  // --- 1. IG DM MESSAGE HANDLER ---
+  @Post('messages')
+  async handleMessages(@Body() body: any) {
+    console.log('📩 [DM] Webhook event received:', JSON.stringify(body, null, 2));
+    if (body?.entry) {
+      for (const entry of body.entry) {
+        if (entry.messaging) {
+          for (const messagingEvent of entry.messaging) {
+            const senderId = messagingEvent.sender?.id;
+            const mid = messagingEvent.message?.mid;
+            const text = messagingEvent.message?.text ?? '';
+
+            console.log('[DEBUG]', { senderId, mid, text });
+
+            if (mid && senderId && text) {
+              const exists = await this.messageRepo.findOne({ where: { mid } });
+              if (!exists) {
+                const msg = this.messageRepo.create({
+                  senderId,
+                  text,
+                  mid,
+                });
+                await this.messageRepo.save(msg);
+                console.log('✅ Message saved:', { senderId, text, mid });
+              } else {
+                console.log('ℹ️ Duplicate message ignored:', mid);
+              }
+            } else {
+              console.log('❗Missing one of mid/senderId/text', { senderId, mid, text });
+            }
+          }
+        }
+      }
+    }
+    return 'ok';
+  }
+
+  // --- 2. IG STORY MENTION & MENTION HANDLER ---
+  @Post()
+  async handleWebhook(@Body() body: any) {
+    console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
+
+    if (body?.entry) {
+      for (const entry of body.entry) {
+        // Story mentions (messages webhook)
+        if (entry.messaging) {
+          for (const messagingEvent of entry.messaging) {
+            const senderId = messagingEvent.sender?.id;
+            const timestamp = messagingEvent.timestamp
+              ? new Date(messagingEvent.timestamp)
+              : new Date();
+            const attachments = messagingEvent.message?.attachments || [];
+
+            for (const attachment of attachments) {
+              if (attachment.type === 'story_mention') {
+                const permalink = attachment.payload?.url;
+                const activity = new AmbassadorActivity();
+                activity.mediaType = 'story';
+                activity.permalink = permalink;
+                activity.timestamp = timestamp;
+                activity.userInstagramId = senderId;
+                await this.activityRepo.save(activity);
+                console.log('✅ Story mention saved for user:', senderId);
+              }
+            }
+          }
+        }
+
+        // Standard IG mention webhook
+        const changes = entry.changes || [];
+        for (const change of changes) {
+          if (change.field === 'mentions') {
+            const mediaId = change.value.media_id;
+            const fromUsername = change.value.from?.username;
+            try {
+              const media = await this.fetchMediaDetails(mediaId);
+              const alreadyExists = await this.activityRepo.findOne({
+                where: { permalink: media.permalink },
+              });
+              if (alreadyExists) continue;
+
+              const user = await this.userRepo.findOne({
+                where: { instagram: fromUsername },
+              });
+
+              const activity = new AmbassadorActivity();
+              activity.mediaType = media.media_type;
+              activity.permalink = media.permalink;
+              activity.timestamp = new Date(media.timestamp);
+              activity.userInstagramId = fromUsername;
+              if (user) activity.user = user;
+              await this.activityRepo.save(activity);
+            } catch (err: any) {
+              console.error('❌ Error:', err.message);
+            }
+          }
+        }
+      }
+    }
+    return 'ok';
+  }
+
+  // --- 3. Standard GET Endpoints for Debug ---
   @Get('mentions/:userInstagramId')
   async getUserMentions(@Param('userInstagramId') userId: string) {
     return this.activityRepo.find({
@@ -57,8 +159,7 @@ export class InstagramWebhookController {
   async getWeeklyStats(@Param('userInstagramId') userId: string) {
     const now = new Date();
     const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
-
+    startOfWeek.setDate(now.getDate() - now.getDay());
     return this.activityRepo
       .createQueryBuilder('activity')
       .select('activity.mediaType', 'mediaType')
@@ -119,108 +220,6 @@ export class InstagramWebhookController {
     console.log('❌ Webhook verification failed');
     return 'Invalid verify token';
   }
-
-  // ========== NEW ENDPOINT FOR MESSAGE LOGGING ==========
-  @Post('messages')
-  async handleWebhook(@Body() body: any) {
-    console.log('📩 [DM] Webhook event received:', JSON.stringify(body, null, 2));
-
-    if (body?.entry) {
-      for (const entry of body.entry) {
-        if (entry.messaging) {
-          for (const messagingEvent of entry.messaging) {
-            const senderId = messagingEvent.sender?.id;
-            const mid = messagingEvent.message?.mid;
-            const text = messagingEvent.message?.text ?? '';
-
-            console.log('[DEBUG]', { senderId, mid, text });
-
-            if (mid && senderId && text) {
-              const exists = await this.messageRepo.findOne({ where: { mid } });
-              if (!exists) {
-                const msg = this.messageRepo.create({
-                  senderId,
-                  text,
-                  mid,
-                });
-                await this.messageRepo.save(msg);
-                console.log('✅ Message saved:', { senderId, text, mid });
-              } else {
-                console.log('ℹ️ Duplicate message ignored:', mid);
-              }
-            } else {
-              console.log('❗Missing one of mid/senderId/text', { senderId, mid, text });
-            }
-          }
-        }
-      }
-    }
-    return 'ok';
-  }
-
-
-  // ========== YOUR EXISTING MENTION HANDLER ==========
-  // @Post()
-  // async handleWebhook(@Body() body: any) {
-  //   console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
-
-  //   if (body?.entry) {
-  //     for (const entry of body.entry) {
-  //       // 1. Handle messages webhook (story_mention)
-  //       if (entry.messaging) {
-  //         for (const messagingEvent of entry.messaging) {
-  //           const senderId = messagingEvent.sender?.id;
-  //           const timestamp = messagingEvent.timestamp ? new Date(messagingEvent.timestamp) : new Date();
-  //           const attachments = messagingEvent.message?.attachments || [];
-
-  //           for (const attachment of attachments) {
-  //             if (attachment.type === 'story_mention') {
-  //               const permalink = attachment.payload?.url;
-  //               const activity = new AmbassadorActivity();
-  //               activity.mediaType = 'story';
-  //               activity.permalink = permalink;
-  //               activity.timestamp = timestamp;
-  //               activity.userInstagramId = senderId;
-  //               await this.activityRepo.save(activity);
-  //               console.log('✅ Story mention saved for user:', senderId);
-  //             }
-  //           }
-  //         }
-  //       }
-
-  //       // 2. Fallback to your previous mentions webhook handler
-  //       const changes = entry.changes || [];
-  //       for (const change of changes) {
-  //         if (change.field === 'mentions') {
-  //           const mediaId = change.value.media_id;
-  //           const fromUsername = change.value.from?.username;
-  //           try {
-  //             const media = await this.fetchMediaDetails(mediaId);
-  //             const alreadyExists = await this.activityRepo.findOne({
-  //               where: { permalink: media.permalink },
-  //             });
-  //             if (alreadyExists) continue;
-
-  //             const user = await this.userRepo.findOne({
-  //               where: { instagram: fromUsername },
-  //             });
-
-  //             const activity = new AmbassadorActivity();
-  //             activity.mediaType = media.media_type;
-  //             activity.permalink = media.permalink;
-  //             activity.timestamp = new Date(media.timestamp);
-  //             activity.userInstagramId = fromUsername;
-  //             if (user) activity.user = user;
-  //             await this.activityRepo.save(activity);
-  //           } catch (err: any) {
-  //             console.error('❌ Error:', err.message);
-  //           }
-  //         }
-  //       }
-  //     }
-  //   }
-  //   return 'ok';
-  // }
 
   private async fetchMediaDetails(mediaId: string) {
     const url = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/${mediaId}`;
