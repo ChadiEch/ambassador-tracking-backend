@@ -72,11 +72,13 @@ export class InstagramWebhookController {
 
     // For each, aggregate activity
     const result = await Promise.all(allAmbassadors.map(async user => {
-      // Activity aggregation
+      // Use instagramId if available, else instagram (username), else id
+      let matchUserId = user.instagram || user.instagram || user.id;
+
       let qb = this.activityRepo.createQueryBuilder('a')
         .select('a.mediaType', 'mediaType')
         .addSelect('COUNT(*)', 'count')
-        .where('a.userInstagramId = :userId', { userId: user.instagram || user.id });
+        .where('a.userInstagramId = :userId', { userId: matchUserId });
 
       if (start && end) {
         qb = qb.andWhere('a.timestamp BETWEEN :start AND :end', { start, end });
@@ -107,6 +109,7 @@ export class InstagramWebhookController {
         compliance,
       };
     }));
+
     console.log('📊 Compliance result:', JSON.stringify(result, null, 2));
     return result;
   }
@@ -205,5 +208,3 @@ export class InstagramWebhookController {
     return response.data;
   }
 }
-// This controller handles Instagram webhooks for mentions and story mentions.
-// It verifies the webhook, processes incoming events, and saves ambassador activities to the database. 
