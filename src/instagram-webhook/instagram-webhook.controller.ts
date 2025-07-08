@@ -93,7 +93,7 @@ async handleWebhook(@Body() body: any) {
               });
 
               const activity = new AmbassadorActivity();
-              activity.mediaType = 'story_mention';
+              activity.mediaType = 'story';
               activity.permalink = permalink;
               activity.timestamp = timestamp;
               activity.userInstagramId = senderId;
