@@ -15,7 +15,6 @@ export class AmbassadorActivity {
 @Column({ nullable: true })
 mediaId: string | null;
 
-
   @Column()
   mediaType: string;
 
