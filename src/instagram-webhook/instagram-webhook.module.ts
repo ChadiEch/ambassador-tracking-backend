@@ -5,13 +5,15 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { InstagramWebhookController } from './instagram-webhook.controller';
 import { AmbassadorActivity } from '../entities/ambassador-activity.entity';
 import { User } from '../users/entities/user.entity';
+import { InstagramMessage } from '../entities/instagram-message.entity'; // <-- Add this import
 
 @Module({
   imports: [
     HttpModule,
     TypeOrmModule.forFeature([
       AmbassadorActivity, // ✅ Already imported
-      User                // ✅ This is the key missing part!
+      User ,
+      InstagramMessage               // ✅ This is the key missing part!
     ]),
   ],
   controllers: [InstagramWebhookController],
