@@ -110,15 +110,16 @@ export class AnalyticsService {
       .groupBy('a.mediaType')
       .getRawMany();
 
-    const countMap: Record<string, number> = {
-      STORY: 0,
-      IMAGE: 0,
-      VIDEO: 0,
-    };
+const countMap: Record<string, number> = {
+  STORY: 0,
+  IMAGE: 0,
+  VIDEO: 0,
+};
 
-    for (const row of counts) {
-      countMap[row.mediaType] = parseInt(row.count, 10);
-    }
+for (const row of counts) {
+  countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
+}
+
 
     return {
       actual: {
