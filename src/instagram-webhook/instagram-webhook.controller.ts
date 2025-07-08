@@ -107,7 +107,7 @@ export class InstagramWebhookController {
         compliance,
       };
     }));
-
+    console.log('📊 Compliance result:', JSON.stringify(result, null, 2));
     return result;
   }
 
