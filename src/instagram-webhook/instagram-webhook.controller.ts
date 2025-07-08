@@ -120,38 +120,44 @@ export class InstagramWebhookController {
   }
 
   // ========== NEW ENDPOINT FOR MESSAGE LOGGING ==========
-  @Post('messages')
-  async handleMessages(@Body() body: any) {
-    console.log('📩 [DM] Webhook event received:', JSON.stringify(body, null, 2));
+@Post('messages')
+async handleMessages(@Body() body: any) {
+  console.log('📩 [DM] Webhook event received:', JSON.stringify(body, null, 2));
 
-    if (body?.entry) {
-      for (const entry of body.entry) {
-        if (entry.messaging) {
-          for (const messagingEvent of entry.messaging) {
-            const senderId = messagingEvent.sender?.id;
-            const mid = messagingEvent.message?.mid;
-            const text = messagingEvent.message?.text ?? '';
+  if (body?.entry) {
+    for (const entry of body.entry) {
+      if (entry.messaging) {
+        for (const messagingEvent of entry.messaging) {
+          const senderId = messagingEvent.sender?.id;
+          const mid = messagingEvent.message?.mid;
+          const text = messagingEvent.message?.text ?? '';
 
-            if (mid && senderId && text) {
-              const exists = await this.messageRepo.findOne({ where: { mid } });
-              if (!exists) {
-                const msg = this.messageRepo.create({
-                  senderId,
-                  text,
-                  mid,
-                });
-                await this.messageRepo.save(msg);
-                console.log('✅ Message saved:', { senderId, text });
-              } else {
-                console.log('ℹ️ Duplicate message ignored:', mid);
-              }
+          console.log('Debug: Found messagingEvent:', { senderId, mid, text });
+
+          if (mid && senderId && text) {
+            const exists = await this.messageRepo.findOne({ where: { mid } });
+            if (!exists) {
+              const msg = this.messageRepo.create({
+                senderId,
+                text,
+                mid,
+              });
+              await this.messageRepo.save(msg);
+              console.log('✅ Message saved:', { senderId, text, mid });
+            } else {
+              console.log('ℹ️ Duplicate message ignored:', mid);
             }
+          } else {
+            console.log('❗Missing one of mid/senderId/text', { senderId, mid, text });
           }
         }
       }
     }
-    return 'ok';
+  } else {
+    console.log('❗No entry in webhook body:', body);
   }
+  return 'ok';
+}
 
   // ========== YOUR EXISTING MENTION HANDLER ==========
   @Post()
