@@ -15,6 +15,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthController } from './auth/auth.controller';
 import { AmbassadorActivity } from './entities/ambassador-activity.entity';
 import { InstagramWebhookModules } from './webhooks/instagram-webhook.module';
+import { InstagramMessage } from './entities/instagram-message.entity';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ TypeOrmModule.forRootAsync({
 }),
 InstagramWebhookModules,
     // Feature Modules
+    InstagramMessage,
     AuthModule,
     InstagramWebhookModule,
     UsersModule,

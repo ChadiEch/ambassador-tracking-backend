@@ -12,6 +12,7 @@ import { lastValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AmbassadorActivity } from '../entities/ambassador-activity.entity';
+import { InstagramMessage } from '../entities/instagram-message.entity'; // <-- import
 import { User } from 'src/users/entities/user.entity';
 
 function mapToPluralKeys(obj: any) {
@@ -35,6 +36,8 @@ export class InstagramWebhookController {
     private readonly activityRepo: Repository<AmbassadorActivity>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(InstagramMessage)
+    private readonly messageRepo: Repository<InstagramMessage>, // <-- add this
   ) {
     this.VERIFY_TOKEN = this.configService.get<string>('META_VERIFY_TOKEN') ?? '';
     this.PAGE_ACCESS_TOKEN = this.configService.get<string>('PAGE_ACCESS_TOKEN') ?? '';
@@ -67,14 +70,9 @@ export class InstagramWebhookController {
 
   @Get('analytics/all-compliance')
   async getAllCompliance(@Query('start') start: string, @Query('end') end: string) {
-    // Get all ambassadors
     const allAmbassadors = await this.userRepo.find({ where: { role: 'ambassador' } });
-
-    // For each, aggregate activity
     const result = await Promise.all(allAmbassadors.map(async user => {
-      // Use instagramId if available, else instagram (username), else id
       let matchUserId = user.instagram || user.instagram || user.id;
-
       let qb = this.activityRepo.createQueryBuilder('a')
         .select('a.mediaType', 'mediaType')
         .addSelect('COUNT(*)', 'count')
@@ -86,15 +84,9 @@ export class InstagramWebhookController {
 
       qb = qb.groupBy('a.mediaType');
       const actualRaw = await qb.getRawMany();
-
-      // Aggregate result to { story: N, post: M, reel: L }
       const actualCountObj: any = {};
       actualRaw.forEach(r => actualCountObj[r.mediaType] = parseInt(r.count, 10));
-
-      // Dummy expected, replace with your logic if needed!
       const expectedObj = { story: 2, post: 1, reel: 1 };
-
-      // Compliance calculation (simple)
       const compliance = {
         story: (actualCountObj.story ?? 0) >= expectedObj.story ? 'green' : 'red',
         post: (actualCountObj.post ?? 0) >= expectedObj.post ? 'green' : 'red',
@@ -127,6 +119,41 @@ export class InstagramWebhookController {
     return 'Invalid verify token';
   }
 
+  // ========== NEW ENDPOINT FOR MESSAGE LOGGING ==========
+  @Post('messages')
+  async handleMessages(@Body() body: any) {
+    console.log('📩 [DM] Webhook event received:', JSON.stringify(body, null, 2));
+
+    if (body?.entry) {
+      for (const entry of body.entry) {
+        if (entry.messaging) {
+          for (const messagingEvent of entry.messaging) {
+            const senderId = messagingEvent.sender?.id;
+            const mid = messagingEvent.message?.mid;
+            const text = messagingEvent.message?.text ?? '';
+
+            if (mid && senderId && text) {
+              const exists = await this.messageRepo.findOne({ where: { mid } });
+              if (!exists) {
+                const msg = this.messageRepo.create({
+                  senderId,
+                  text,
+                  mid,
+                });
+                await this.messageRepo.save(msg);
+                console.log('✅ Message saved:', { senderId, text });
+              } else {
+                console.log('ℹ️ Duplicate message ignored:', mid);
+              }
+            }
+          }
+        }
+      }
+    }
+    return 'ok';
+  }
+
+  // ========== YOUR EXISTING MENTION HANDLER ==========
   @Post()
   async handleWebhook(@Body() body: any) {
     console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
@@ -143,7 +170,6 @@ export class InstagramWebhookController {
             for (const attachment of attachments) {
               if (attachment.type === 'story_mention') {
                 const permalink = attachment.payload?.url;
-                // Remove user lookup if you do not store numeric ID
                 const activity = new AmbassadorActivity();
                 activity.mediaType = 'story';
                 activity.permalink = permalink;
@@ -164,12 +190,10 @@ export class InstagramWebhookController {
             const fromUsername = change.value.from?.username;
             try {
               const media = await this.fetchMediaDetails(mediaId);
-
-              // Optional: Check for duplicate media
               const alreadyExists = await this.activityRepo.findOne({
                 where: { permalink: media.permalink },
               });
-              if (alreadyExists) continue; // Skip duplicate
+              if (alreadyExists) continue;
 
               const user = await this.userRepo.findOne({
                 where: { instagram: fromUsername },
@@ -181,7 +205,6 @@ export class InstagramWebhookController {
               activity.timestamp = new Date(media.timestamp);
               activity.userInstagramId = fromUsername;
               if (user) activity.user = user;
-
               await this.activityRepo.save(activity);
             } catch (err: any) {
               console.error('❌ Error:', err.message);
@@ -190,7 +213,6 @@ export class InstagramWebhookController {
         }
       }
     }
-
     return 'ok';
   }
 
