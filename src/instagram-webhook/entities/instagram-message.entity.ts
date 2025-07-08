@@ -1,7 +1,7 @@
 // src/entities/instagram-message.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
 
-@Entity()
+@Entity('instagram_message') // or whatever your table is called
 export class InstagramMessage {
   @PrimaryGeneratedColumn('uuid')
   id: string;
