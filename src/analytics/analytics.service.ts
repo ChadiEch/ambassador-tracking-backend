@@ -37,7 +37,7 @@ export class AnalyticsService {
     const results: AmbassadorSummary[] = [];
 
     for (const user of users) {
-      // Use user.instagramId for matching activities!
+      // Use user.instagram for matching activities!
       const counts = await this.activityRepo
         .createQueryBuilder('a')
         .select('a.mediaType', 'mediaType')
@@ -56,8 +56,9 @@ export class AnalyticsService {
         VIDEO: 0,
       };
 
+      // ✅ FIXED: Normalize mediaType to uppercase
       for (const row of counts) {
-        countMap[row.mediaType] = parseInt(row.count, 10);
+        countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
       }
 
       results.push({
@@ -97,7 +98,7 @@ export class AnalyticsService {
     const from = startDate || new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
     const to = endDate || now;
 
-    // Use user.instagramId for matching activities!
+    // Use user.instagram for matching activities!
     const counts = await this.activityRepo
       .createQueryBuilder('a')
       .select('a.mediaType', 'mediaType')
@@ -110,16 +111,16 @@ export class AnalyticsService {
       .groupBy('a.mediaType')
       .getRawMany();
 
-const countMap: Record<string, number> = {
-  STORY: 0,
-  IMAGE: 0,
-  VIDEO: 0,
-};
+    const countMap: Record<string, number> = {
+      STORY: 0,
+      IMAGE: 0,
+      VIDEO: 0,
+    };
 
-for (const row of counts) {
-  countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
-}
-
+    // ✅ FIXED: Normalize mediaType to uppercase
+    for (const row of counts) {
+      countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
+    }
 
     return {
       actual: {
@@ -140,7 +141,11 @@ for (const row of counts) {
     };
   }
 
-  async getTeamCompliance(leaderId: string, startDate?: Date, endDate?: Date): Promise<AmbassadorSummary[]> {
+  async getTeamCompliance(
+    leaderId: string,
+    startDate?: Date,
+    endDate?: Date
+  ): Promise<AmbassadorSummary[]> {
     const now = new Date();
     const from = startDate || new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
     const to = endDate || now;
@@ -160,7 +165,7 @@ for (const row of counts) {
     const results: AmbassadorSummary[] = [];
 
     for (const member of team.members) {
-      // Use member.user.instagramId for matching activities!
+      // Use member.user.instagram for matching activities!
       const counts = await this.activityRepo
         .createQueryBuilder('a')
         .select('a.mediaType', 'mediaType')
@@ -174,8 +179,9 @@ for (const row of counts) {
         .getRawMany();
 
       const countMap = { STORY: 0, IMAGE: 0, VIDEO: 0 };
+      // ✅ FIXED: Normalize mediaType to uppercase
       for (const row of counts) {
-        countMap[row.mediaType] = parseInt(row.count, 10);
+        countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
       }
 
       results.push({
@@ -203,5 +209,4 @@ for (const row of counts) {
 
     return results;
   }
-
 }
