@@ -12,7 +12,7 @@ import { lastValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AmbassadorActivity } from '../entities/ambassador-activity.entity';
-import { InstagramMessage } from '../entities/instagram-message.entity'; // <-- import
+import { InstagramMessage } from '../entities/instagram-message.entity';
 import { User } from 'src/users/entities/user.entity';
 
 function mapToPluralKeys(obj: any) {
@@ -37,7 +37,8 @@ export class InstagramWebhookController {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     @InjectRepository(InstagramMessage)
-    private readonly messageRepo: Repository<InstagramMessage>, // <-- add this
+    private readonly messageRepo: Repository<InstagramMessage>,
+// <-- add this
   ) {
     this.VERIFY_TOKEN = this.configService.get<string>('META_VERIFY_TOKEN') ?? '';
     this.PAGE_ACCESS_TOKEN = this.configService.get<string>('PAGE_ACCESS_TOKEN') ?? '';
@@ -120,44 +121,43 @@ export class InstagramWebhookController {
   }
 
   // ========== NEW ENDPOINT FOR MESSAGE LOGGING ==========
-@Post('messages')
-async handleMessages(@Body() body: any) {
-  console.log('📩 [DM] Webhook event received:', JSON.stringify(body, null, 2));
+  @Post('messages')
+  async handleMessages(@Body() body: any) {
+    console.log('📩 [DM] Webhook event received:', JSON.stringify(body, null, 2));
 
-  if (body?.entry) {
-    for (const entry of body.entry) {
-      if (entry.messaging) {
-        for (const messagingEvent of entry.messaging) {
-          const senderId = messagingEvent.sender?.id;
-          const mid = messagingEvent.message?.mid;
-          const text = messagingEvent.message?.text ?? '';
+    if (body?.entry) {
+      for (const entry of body.entry) {
+        if (entry.messaging) {
+          for (const messagingEvent of entry.messaging) {
+            const senderId = messagingEvent.sender?.id;
+            const mid = messagingEvent.message?.mid;
+            const text = messagingEvent.message?.text ?? '';
 
-          console.log('Debug: Found messagingEvent:', { senderId, mid, text });
+            console.log('[DEBUG]', { senderId, mid, text });
 
-          if (mid && senderId && text) {
-            const exists = await this.messageRepo.findOne({ where: { mid } });
-            if (!exists) {
-              const msg = this.messageRepo.create({
-                senderId,
-                text,
-                mid,
-              });
-              await this.messageRepo.save(msg);
-              console.log('✅ Message saved:', { senderId, text, mid });
+            if (mid && senderId && text) {
+              const exists = await this.messageRepo.findOne({ where: { mid } });
+              if (!exists) {
+                const msg = this.messageRepo.create({
+                  senderId,
+                  text,
+                  mid,
+                });
+                await this.messageRepo.save(msg);
+                console.log('✅ Message saved:', { senderId, text, mid });
+              } else {
+                console.log('ℹ️ Duplicate message ignored:', mid);
+              }
             } else {
-              console.log('ℹ️ Duplicate message ignored:', mid);
+              console.log('❗Missing one of mid/senderId/text', { senderId, mid, text });
             }
-          } else {
-            console.log('❗Missing one of mid/senderId/text', { senderId, mid, text });
           }
         }
       }
     }
-  } else {
-    console.log('❗No entry in webhook body:', body);
+    return 'ok';
   }
-  return 'ok';
-}
+
 
   // ========== YOUR EXISTING MENTION HANDLER ==========
   @Post()
