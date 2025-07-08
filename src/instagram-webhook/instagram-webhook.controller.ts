@@ -93,7 +93,6 @@ async handleWebhook(@Body() body: any) {
               });
 
               const activity = new AmbassadorActivity();
-              activity.mediaId = ' '; // No mediaId from message webhook
               activity.mediaType = 'story_mention';
               activity.permalink = permalink;
               activity.timestamp = timestamp;

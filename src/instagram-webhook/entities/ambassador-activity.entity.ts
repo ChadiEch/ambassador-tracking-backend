@@ -12,10 +12,6 @@ export class AmbassadorActivity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-@Column({ nullable: true })
-mediaId: string | null;
-
-
   @Column()
   mediaType: string;
 

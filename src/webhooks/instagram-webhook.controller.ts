@@ -88,7 +88,7 @@ async handleWebhook(@Body() body: any) {
 
             // Optional: Check for duplicate media
             const alreadyExists = await this.activityRepo.findOne({
-              where: { mediaId },
+              // where: { mediaId },
             });
             if (alreadyExists) continue; // Skip duplicate
 
@@ -97,7 +97,7 @@ async handleWebhook(@Body() body: any) {
             });
 
             const activity = new AmbassadorActivity();
-            activity.mediaId = media.id;
+            // activity.mediaId = media.id;
             activity.mediaType = media.media_type;
             activity.permalink = media.permalink;
             activity.timestamp = new Date(media.timestamp);
