@@ -8,7 +8,6 @@ import type { AmbassadorSummary } from './dto/ambassador-summary.dto';
 import { AmbassadorComplianceData } from './dto/ambassador-compliance.dto';
 import { Team } from 'src/teams/entities/team.entity';
 
-
 @Injectable()
 export class AnalyticsService {
   constructor(
@@ -21,8 +20,8 @@ export class AnalyticsService {
     @InjectRepository(PostingRule)
     private rulesRepo: Repository<PostingRule>,
 
-     @InjectRepository(Team)
-     private teamRepo: Repository<Team>,
+    @InjectRepository(Team)
+    private teamRepo: Repository<Team>,
   ) {}
 
   async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<AmbassadorSummary[]> {
@@ -38,6 +37,7 @@ export class AnalyticsService {
     const results: AmbassadorSummary[] = [];
 
     for (const user of users) {
+      // Use user.instagramId for matching activities!
       const counts = await this.activityRepo
         .createQueryBuilder('a')
         .select('a.mediaType', 'mediaType')
@@ -97,6 +97,7 @@ export class AnalyticsService {
     const from = startDate || new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
     const to = endDate || now;
 
+    // Use user.instagramId for matching activities!
     const counts = await this.activityRepo
       .createQueryBuilder('a')
       .select('a.mediaType', 'mediaType')
@@ -138,67 +139,68 @@ export class AnalyticsService {
     };
   }
 
-async getTeamCompliance(leaderId: string, startDate?: Date, endDate?: Date): Promise<AmbassadorSummary[]> {
-  const now = new Date();
-  const from = startDate || new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
-  const to = endDate || now;
+  async getTeamCompliance(leaderId: string, startDate?: Date, endDate?: Date): Promise<AmbassadorSummary[]> {
+    const now = new Date();
+    const from = startDate || new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    const to = endDate || now;
 
-  const team = await this.teamRepo
-    .createQueryBuilder('team')
-    .leftJoinAndSelect('team.members', 'teamMember')
-    .leftJoinAndSelect('teamMember.user', 'user')
-    .where('team.leaderId = :leaderId', { leaderId })
-    .getOne();
+    const team = await this.teamRepo
+      .createQueryBuilder('team')
+      .leftJoinAndSelect('team.members', 'teamMember')
+      .leftJoinAndSelect('teamMember.user', 'user')
+      .where('team.leaderId = :leaderId', { leaderId })
+      .getOne();
 
-  if (!team) {
-    return [];
-  }
-
-  const globalRule = await this.rulesRepo.findOne({ where: {} });
-  const results: AmbassadorSummary[] = [];
-
-  for (const member of team.members) {
-    const counts = await this.activityRepo
-      .createQueryBuilder('a')
-      .select('a.mediaType', 'mediaType')
-      .addSelect('COUNT(*)', 'count')
-      .where('a.userInstagramId = :uid', { uid: member.user.instagram })
-      .andWhere('a.timestamp BETWEEN :start AND :end', {
-        start: from.toISOString(),
-        end: to.toISOString(),
-      })
-      .groupBy('a.mediaType')
-      .getRawMany();
-
-    const countMap = { STORY: 0, IMAGE: 0, VIDEO: 0 };
-    for (const row of counts) {
-      countMap[row.mediaType] = parseInt(row.count, 10);
+    if (!team) {
+      return [];
     }
 
-    results.push({
-      id: member.user.id,
-      name: member.user.name,
-      actual: {
-        stories: countMap.STORY,
-        posts: countMap.IMAGE,
-        reels: countMap.VIDEO,
-      },
-      expected: {
-        stories: globalRule?.stories_per_week ?? 3,
-        posts: globalRule?.posts_per_week ?? 1,
-        reels: globalRule?.reels_per_week ?? 1,
-      },
-      compliance: {
-        story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
-        post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
-        reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
-      },
-      role: member.user.role,
-      active: member.user.active,
-    });
-  }
+    const globalRule = await this.rulesRepo.findOne({ where: {} });
+    const results: AmbassadorSummary[] = [];
 
-  return results;
-}
+    for (const member of team.members) {
+      // Use member.user.instagramId for matching activities!
+      const counts = await this.activityRepo
+        .createQueryBuilder('a')
+        .select('a.mediaType', 'mediaType')
+        .addSelect('COUNT(*)', 'count')
+        .where('a.userInstagramId = :uid', { uid: member.user.instagram })
+        .andWhere('a.timestamp BETWEEN :start AND :end', {
+          start: from.toISOString(),
+          end: to.toISOString(),
+        })
+        .groupBy('a.mediaType')
+        .getRawMany();
+
+      const countMap = { STORY: 0, IMAGE: 0, VIDEO: 0 };
+      for (const row of counts) {
+        countMap[row.mediaType] = parseInt(row.count, 10);
+      }
+
+      results.push({
+        id: member.user.id,
+        name: member.user.name,
+        actual: {
+          stories: countMap.STORY,
+          posts: countMap.IMAGE,
+          reels: countMap.VIDEO,
+        },
+        expected: {
+          stories: globalRule?.stories_per_week ?? 3,
+          posts: globalRule?.posts_per_week ?? 1,
+          reels: globalRule?.reels_per_week ?? 1,
+        },
+        compliance: {
+          story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
+          post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
+          reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
+        },
+        role: member.user.role,
+        active: member.user.active,
+      });
+    }
+
+    return results;
+  }
 
 }
