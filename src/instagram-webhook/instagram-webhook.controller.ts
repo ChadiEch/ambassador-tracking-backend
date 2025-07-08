@@ -110,7 +110,34 @@ async handleWebhook(@Body() body: any) {
       const changes = entry.changes || [];
       for (const change of changes) {
         if (change.field === 'mentions') {
-          // ... your existing mention code here ...
+          const mediaId = change.value.media_id;
+          const fromUsername = change.value.from?.username;
+          const brandMentionedId = change.value.mentioned_user_id;
+
+          try {
+            const media = await this.fetchMediaDetails(mediaId);
+
+            // Optional: Check for duplicate media
+            const alreadyExists = await this.activityRepo.findOne({
+              where: { permalink: media.permalink },
+            });
+            if (alreadyExists) continue; // Skip duplicate
+
+            const user = await this.userRepo.findOne({
+              where: { instagram: fromUsername },
+            });
+
+            const activity = new AmbassadorActivity();
+            activity.mediaType = media.media_type;
+            activity.permalink = media.permalink;
+            activity.timestamp = new Date(media.timestamp);
+            activity.userInstagramId = fromUsername;
+            if (user) activity.user = user;
+
+            await this.activityRepo.save(activity);
+          } catch (err: any) {
+            console.error('❌ Error:', err.message);
+          }
         }
       }
     }
