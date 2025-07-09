@@ -25,7 +25,7 @@ async create(createTeamDto: CreateTeamDto) {
   const { name, leaderId, memberIds } = createTeamDto;
   const uniqueMemberIds = [...new Set(memberIds)];
 
-  if (uniqueMemberIds.length < 1 || uniqueMemberIds.length > 10) {
+  if (uniqueMemberIds.length < 1 || uniqueMemberIds.length > 50) {
     throw new BadRequestException('A team must have between 1 and 10 unique members.');
   }
 
