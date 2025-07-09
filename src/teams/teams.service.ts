@@ -135,8 +135,8 @@ members: team.members.map((tm) => ({
   if (dto.memberIds && Array.isArray(dto.memberIds)) {
     const uniqueMemberIds = [...new Set(dto.memberIds)];
 
-    if (uniqueMemberIds.length < 1 || uniqueMemberIds.length > 10) {
-      throw new BadRequestException('A team must have between 1 and 10 unique members.');
+    if (uniqueMemberIds.length < 1 || uniqueMemberIds.length > 50) {
+      throw new BadRequestException('A team must have between 1 and 50 unique members.');
     }
 
     const existingMembers = await this.teamMemberRepo.find({
