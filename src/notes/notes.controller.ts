@@ -1,5 +1,5 @@
 // src/notes/notes.controller.ts
-import { Controller, Get, Post, Body, Patch, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Query } from '@nestjs/common';
 import { NotesService } from './notes.service';
 import { CreateNoteDto } from './dto/create-note.dto';
 
@@ -16,6 +16,12 @@ export class NotesController {
   findAllAdmin() {
     return this.notesService.findAllForAdmin();
   }
+
+@Get('/mine')
+getMyNotes(@Query('userId') userId: string) {
+  return this.notesService.findAllByAuthor(userId);
+}
+
 
   @Patch('/admin/:id/toggle-archive')
   toggleArchive(@Param('id') id: string) {

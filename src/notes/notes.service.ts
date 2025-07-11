@@ -55,4 +55,20 @@ async create(dto: CreateNoteDto) {
 
     return { message: 'Note archive state toggled' };
   }
+
+  async findAllByAuthor(userId: string) {
+  const notes = await this.noteRepo.find({
+    where: { author: { id: userId } },
+    relations: ['target_user'],
+    order: { created_at: 'DESC' },
+  });
+
+  return notes.map((note) => ({
+    id: note.id,
+    targetName: note.target_user?.name ?? '[Unknown]',
+    content: note.content,
+    createdAt: note.created_at,
+  }));
+}
+
 }
