@@ -12,20 +12,24 @@ export class NotesService {
     @InjectRepository(User) private userRepo: Repository<User>,
   ) {}
 
-  async create(dto: CreateNoteDto, user: User | null) {
-    if (!user) {
-      throw new Error('User context is required to create a note');
-    }
-
-    const note = this.noteRepo.create({
-      content: dto.content,
-      author: user,
-      target_user: user,
-    });
-
-    await this.noteRepo.save(note);
-    return { message: 'Note submitted successfully' };
+async create(dto: CreateNoteDto, user: User | null) {
+  if (!user) {
+    throw new Error('User context is required to create a note');
   }
+
+  const target = await this.userRepo.findOne({ where: { id: dto.targetUserId } });
+  if (!target) throw new NotFoundException('Target user not found');
+
+  const note = this.noteRepo.create({
+    content: dto.content,
+    author: user,
+    target_user: target,
+  });
+
+  await this.noteRepo.save(note);
+  return { message: 'Note submitted successfully' };
+}
+
 
   async findAllForAdmin() {
     const notes = await this.noteRepo.find({

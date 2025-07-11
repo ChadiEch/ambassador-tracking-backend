@@ -7,10 +7,12 @@ export class NotesController {
   constructor(private readonly notesService: NotesService) {}
 
   // Ambassadors create notes (no auth yet — user is null)
-  @Post()
-  create(@Body() createNoteDto: CreateNoteDto) {
-    return this.notesService.create(createNoteDto, null);
-  }
+@Post()
+create(@Body() createNoteDto: CreateNoteDto) {
+  const mockLeaderUser = { id: 'leader-id', name: 'Mock Leader', role: 'leader' } as any;
+  return this.notesService.create(createNoteDto, mockLeaderUser); // Replace with real user context in production
+}
+
 
   // Admin view for moderation
   @Get('/admin')
