@@ -51,6 +51,10 @@ export class User {
   @Column({ type: 'text', nullable: true })
   note?: string;
 
+  @Column({ nullable: true })
+photoUrl?: string;
+
+
   @OneToMany(() => TeamMember, (teamMember) => teamMember.user)
   teamMemberships: TeamMember[];
 

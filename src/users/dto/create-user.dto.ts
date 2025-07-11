@@ -33,4 +33,9 @@ export class CreateUserDto {
 @IsString()
 note?: string;
 
+@IsOptional()
+@IsString()
+photoUrl?: string;
+
+
 }
