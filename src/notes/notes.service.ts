@@ -70,12 +70,19 @@ async create(dto: CreateNoteDto) {
     createdAt: note.created_at,
   }));
 }
-  async getNotesForUser(userId: string) {
-    return this.noteRepo.find({
-where: [{ target_user: { id: userId } }],
-relations: ['target_user', 'author'], // optional, if you need user info
-      order: { created_at: 'DESC' },
-    });
-  }
+async getNotesForUser(userId: string) {
+  return this.noteRepo.find({
+    where: {
+      target_user: {
+        id: userId,
+      },
+    },
+    relations: ['author'], // 👈 THIS IS MISSING
+    order: {
+      created_at: 'DESC',
+    },
+  });
+}
+
 
 }
