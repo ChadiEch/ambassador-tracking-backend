@@ -71,18 +71,24 @@ async create(dto: CreateNoteDto) {
   }));
 }
 async getNotesForUser(userId: string) {
-  return this.noteRepo.find({
+  const notes = await this.noteRepo.find({
     where: {
       target_user: {
         id: userId,
       },
     },
-    relations: ['author'], // 👈 THIS IS MISSING
+    relations: ['author'],
     order: {
       created_at: 'DESC',
     },
   });
+
+  // Debug log
+  console.log('📌 Loaded notes with authors:', notes);
+
+  return notes;
 }
+
 
 
 }

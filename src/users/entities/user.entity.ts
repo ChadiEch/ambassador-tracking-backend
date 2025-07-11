@@ -8,7 +8,7 @@ import {
 import { Team } from 'src/teams/entities/team.entity';
 import { TeamMember } from 'src/team-members/entities/team-member.entity';
 import { AmbassadorActivity } from 'src/entities/ambassador-activity.entity';
-
+import { Note } from 'src/notes/entities/note.entity';
 
 @Entity()
 export class User {
@@ -53,6 +53,10 @@ export class User {
 
   @OneToMany(() => TeamMember, (teamMember) => teamMember.user)
   teamMemberships: TeamMember[];
+
+  @OneToMany(() => Note, (note) => note.author)
+authoredNotes: Note[];
+
   
 @OneToMany(() => AmbassadorActivity, (activity) => activity.user)
 activities: AmbassadorActivity[];
