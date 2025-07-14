@@ -62,9 +62,10 @@ export class AnalyticsService {
       results.push({
         id: user.id,
         name: user.name,
-        photoUrl: user.photoUrl, // ✅ Added
+        photoUrl: user.photoUrl,
         role: user.role,
         active: user.active,
+        edits: [], // ✅ Required field provided
         actual: {
           stories: countMap['STORY'],
           posts: countMap['IMAGE'],
@@ -182,9 +183,10 @@ export class AnalyticsService {
       results.push({
         id: member.user.id,
         name: member.user.name,
-        photoUrl: member.user.photoUrl, // ✅ Added
+        photoUrl: member.user.photoUrl,
         role: member.user.role,
         active: member.user.active,
+        edits: [], // ✅ Required field provided
         actual: {
           stories: countMap.STORY,
           posts: countMap.IMAGE,
