@@ -37,7 +37,6 @@ export class AnalyticsService {
     const results: AmbassadorSummary[] = [];
 
     for (const user of users) {
-      // Use user.instagram for matching activities!
       const counts = await this.activityRepo
         .createQueryBuilder('a')
         .select('a.mediaType', 'mediaType')
@@ -56,7 +55,6 @@ export class AnalyticsService {
         VIDEO: 0,
       };
 
-      // ✅ FIXED: Normalize mediaType to uppercase
       for (const row of counts) {
         countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
       }
@@ -64,6 +62,9 @@ export class AnalyticsService {
       results.push({
         id: user.id,
         name: user.name,
+        photoUrl: user.photoUrl, // ✅ Added
+        role: user.role,
+        active: user.active,
         actual: {
           stories: countMap['STORY'],
           posts: countMap['IMAGE'],
@@ -98,7 +99,6 @@ export class AnalyticsService {
     const from = startDate || new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
     const to = endDate || now;
 
-    // Use user.instagram for matching activities!
     const counts = await this.activityRepo
       .createQueryBuilder('a')
       .select('a.mediaType', 'mediaType')
@@ -117,7 +117,6 @@ export class AnalyticsService {
       VIDEO: 0,
     };
 
-    // ✅ FIXED: Normalize mediaType to uppercase
     for (const row of counts) {
       countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
     }
@@ -144,7 +143,7 @@ export class AnalyticsService {
   async getTeamCompliance(
     leaderId: string,
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
   ): Promise<AmbassadorSummary[]> {
     const now = new Date();
     const from = startDate || new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
@@ -157,15 +156,12 @@ export class AnalyticsService {
       .where('team.leaderId = :leaderId', { leaderId })
       .getOne();
 
-    if (!team) {
-      return [];
-    }
+    if (!team) return [];
 
     const globalRule = await this.rulesRepo.findOne({ where: {} });
     const results: AmbassadorSummary[] = [];
 
     for (const member of team.members) {
-      // Use member.user.instagram for matching activities!
       const counts = await this.activityRepo
         .createQueryBuilder('a')
         .select('a.mediaType', 'mediaType')
@@ -179,7 +175,6 @@ export class AnalyticsService {
         .getRawMany();
 
       const countMap = { STORY: 0, IMAGE: 0, VIDEO: 0 };
-      // ✅ FIXED: Normalize mediaType to uppercase
       for (const row of counts) {
         countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
       }
@@ -187,6 +182,9 @@ export class AnalyticsService {
       results.push({
         id: member.user.id,
         name: member.user.name,
+        photoUrl: member.user.photoUrl, // ✅ Added
+        role: member.user.role,
+        active: member.user.active,
         actual: {
           stories: countMap.STORY,
           posts: countMap.IMAGE,
@@ -202,8 +200,6 @@ export class AnalyticsService {
           post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
           reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
         },
-        role: member.user.role,
-        active: member.user.active,
       });
     }
 
