@@ -31,14 +31,25 @@ getTeamCompliance(
 
 
 
-  @Get('weekly-compliance')
-  async getComplianceForUser(
-    @Query('userId') userId: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-  ): Promise<AmbassadorComplianceData> {
-    const startDate = from ? new Date(from) : undefined;
-    const endDate = to ? new Date(to) : undefined;
-    return this.analyticsService.getUserWeeklyCompliance(userId, startDate, endDate);
-  }
+@Get('weekly-compliance')
+async getComplianceForUser(
+  @Query('userId') userId: string,
+  @Query('from') from?: string,
+  @Query('to') to?: string,
+): Promise<any> {
+  const startDate = from ? new Date(from) : undefined;
+  const endDate = to ? new Date(to) : undefined;
+
+  const compliance = await this.analyticsService.getUserWeeklyCompliance(userId, startDate, endDate);
+
+  const user = await this.analyticsService['userRepo'].findOne({ where: { id: userId } });
+  if (!user) throw new Error('User not found');
+
+  return {
+    ...compliance,
+    name: user.name,
+    photoUrl: user.photoUrl,
+  };
+}
+
 }
