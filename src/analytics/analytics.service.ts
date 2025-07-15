@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository,Between } from 'typeorm';
 import { AmbassadorActivity } from '../entities/ambassador-activity.entity';
 import { User } from '../users/entities/user.entity';
 import { PostingRule } from '../posting-rules/entities/posting-rule.entity';
@@ -86,6 +86,109 @@ export class AnalyticsService {
 
     return results;
   }
+
+ // ✅ 1. Admin: Get monthly ambassador activity (stories/posts/reels)
+  async getMonthlyActivity(): Promise<Record<string, any>> {
+    const raw = await this.activityRepo
+      .createQueryBuilder('a')
+      .select("DATE_TRUNC('month', a.timestamp)", 'month')
+      .addSelect('a.mediaType', 'mediaType')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy("month")
+      .addGroupBy('a.mediaType')
+      .orderBy('month', 'ASC')
+      .getRawMany();
+
+    const result: Record<string, Record<string, number>> = {};
+
+    for (const row of raw) {
+      const month = row.month.toISOString().slice(0, 7);
+      const media = row.mediaType;
+      result[month] ??= { STORY: 0, IMAGE: 0, VIDEO: 0, REEL: 0 };
+      result[month][media] = parseInt(row.count, 10);
+    }
+
+    return result;
+  }
+
+  // ✅ 2. Admin: Get monthly activity per team
+  async getTeamMonthlyActivity(): Promise<Record<string, any>> {
+    const raw = await this.activityRepo
+      .createQueryBuilder('a')
+      .leftJoin('a.user', 'user')
+      .leftJoin('user.teamMemberships', 'membership')
+      .leftJoin('membership.team', 'team')
+      .select("DATE_TRUNC('month', a.timestamp)", 'month')
+      .addSelect('team.id', 'teamId')
+      .addSelect('a.mediaType', 'mediaType')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('month')
+      .addGroupBy('team.id')
+      .addGroupBy('a.mediaType')
+      .orderBy('month', 'ASC')
+      .getRawMany();
+
+    const result: Record<string, Record<string, Record<string, number>>> = {};
+
+    for (const row of raw) {
+      const month = row.month.toISOString().slice(0, 7);
+      const teamId = row.teamId;
+      const media = row.mediaType;
+
+      result[teamId] ??= {};
+      result[teamId][month] ??= { STORY: 0, IMAGE: 0, VIDEO: 0, REEL: 0 };
+      result[teamId][month][media] = parseInt(row.count, 10);
+    }
+
+    return result;
+  }
+
+  // ✅ 3. Admin: Pie chart data - team contribution to all content
+  async getTeamContributionPie(): Promise<Record<string, Record<string, number>>> {
+    const raw = await this.activityRepo
+      .createQueryBuilder('a')
+      .leftJoin('a.user', 'user')
+      .leftJoin('user.teamMemberships', 'membership')
+      .leftJoin('membership.team', 'team')
+      .select('team.id', 'teamId')
+      .addSelect('a.mediaType', 'mediaType')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('team.id')
+      .addGroupBy('a.mediaType')
+      .getRawMany();
+
+    const result: Record<string, Record<string, number>> = {};
+
+    for (const row of raw) {
+      const teamId = row.teamId;
+      const media = row.mediaType;
+      result[teamId] ??= {};
+      result[teamId][media] = parseInt(row.count, 10);
+    }
+
+    return result;
+  }
+
+  // ✅ 4. Admin: Count ambassadors following all rules
+  async getOverallComplianceRate(start?: Date, end?: Date): Promise<number> {
+    const all = await this.generateWeeklyCompliance(start, end);
+    return all.filter((a) =>
+      a.compliance.story === 'green' &&
+      a.compliance.post === 'green' &&
+      a.compliance.reel === 'green'
+    ).length;
+  }
+
+  // ✅ 5. Leader: Count compliant ambassadors in specific team
+  async getTeamComplianceRate(leaderId: string, start?: Date, end?: Date): Promise<number> {
+    const teamResults = await this.getTeamCompliance(leaderId, start, end);
+    return teamResults.filter((a) =>
+      a.compliance.story === 'green' &&
+      a.compliance.post === 'green' &&
+      a.compliance.reel === 'green'
+    ).length;
+  }
+
 
   async getUserWeeklyCompliance(
     userId: string,

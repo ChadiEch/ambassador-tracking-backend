@@ -52,4 +52,44 @@ async getComplianceForUser(
   };
 }
 
+ // ✅ 1. Admin - Monthly ambassador activity
+  @Get('monthly-activity')
+  getMonthlyActivity() {
+    return this.analyticsService.getMonthlyActivity();
+  }
+
+  // ✅ 2. Admin - Monthly activity per team
+  @Get('team-monthly-activity')
+  getTeamMonthlyActivity() {
+    return this.analyticsService.getTeamMonthlyActivity();
+  }
+
+  // ✅ 3. Admin - Team contribution pie chart data
+  @Get('team-contribution')
+  getTeamContributionPie() {
+    return this.analyticsService.getTeamContributionPie();
+  }
+
+  // ✅ 4. Admin - Count of ambassadors fully compliant
+  @Get('overall-compliance-count')
+  getOverallComplianceRate(
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+  ) {
+    const from = start ? new Date(start) : undefined;
+    const to = end ? new Date(end) : undefined;
+    return this.analyticsService.getOverallComplianceRate(from, to);
+  }
+
+  // ✅ 5. Leader - Count of compliant users in their team
+  @Get('team-compliance-count')
+  getTeamComplianceRate(
+    @Query('leaderId') leaderId: string,
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+  ) {
+    const from = start ? new Date(start) : undefined;
+    const to = end ? new Date(end) : undefined;
+    return this.analyticsService.getTeamComplianceRate(leaderId, from, to);
+  }
 }
