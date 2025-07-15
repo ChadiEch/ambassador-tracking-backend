@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository,Between } from 'typeorm';
+import { Repository } from 'typeorm';
 import { AmbassadorActivity } from '../entities/ambassador-activity.entity';
 import { User } from '../users/entities/user.entity';
 import { PostingRule } from '../posting-rules/entities/posting-rule.entity';
@@ -65,11 +65,11 @@ export class AnalyticsService {
         photoUrl: user.photoUrl,
         role: user.role,
         active: user.active,
-        edits: [], // ✅ Required field provided
+        edits: [],
         actual: {
-          stories: countMap['STORY'],
-          posts: countMap['IMAGE'],
-          reels: countMap['VIDEO'],
+          stories: countMap.STORY,
+          posts: countMap.IMAGE,
+          reels: countMap.VIDEO,
         },
         expected: {
           stories: globalRule?.stories_per_week ?? 3,
@@ -77,9 +77,9 @@ export class AnalyticsService {
           reels: globalRule?.reels_per_week ?? 1,
         },
         compliance: {
-          story: countMap['STORY'] >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
-          post: countMap['IMAGE'] >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
-          reel: countMap['VIDEO'] >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
+          story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
+          post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
+          reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
         },
       });
     }
@@ -87,14 +87,13 @@ export class AnalyticsService {
     return results;
   }
 
- // ✅ 1. Admin: Get monthly ambassador activity (stories/posts/reels)
-  async getMonthlyActivity(): Promise<Record<string, any>> {
+  async getMonthlyActivity(): Promise<Record<string, Record<string, number>>> {
     const raw = await this.activityRepo
       .createQueryBuilder('a')
       .select("DATE_TRUNC('month', a.timestamp)", 'month')
       .addSelect('a.mediaType', 'mediaType')
       .addSelect('COUNT(*)', 'count')
-      .groupBy("month")
+      .groupBy('month')
       .addGroupBy('a.mediaType')
       .orderBy('month', 'ASC')
       .getRawMany();
@@ -103,7 +102,7 @@ export class AnalyticsService {
 
     for (const row of raw) {
       const month = row.month.toISOString().slice(0, 7);
-      const media = row.mediaType;
+      const media = row.mediaType.toUpperCase();
       result[month] ??= { STORY: 0, IMAGE: 0, VIDEO: 0, REEL: 0 };
       result[month][media] = parseInt(row.count, 10);
     }
@@ -111,8 +110,7 @@ export class AnalyticsService {
     return result;
   }
 
-  // ✅ 2. Admin: Get monthly activity per team
-  async getTeamMonthlyActivity(): Promise<Record<string, any>> {
+  async getTeamMonthlyActivity(): Promise<Record<string, Record<string, Record<string, number>>>> {
     const raw = await this.activityRepo
       .createQueryBuilder('a')
       .leftJoin('a.user', 'user')
@@ -131,9 +129,10 @@ export class AnalyticsService {
     const result: Record<string, Record<string, Record<string, number>>> = {};
 
     for (const row of raw) {
-      const month = row.month.toISOString().slice(0, 7);
+      if (!row.teamId) continue;
       const teamId = row.teamId;
-      const media = row.mediaType;
+      const month = row.month.toISOString().slice(0, 7);
+      const media = row.mediaType.toUpperCase();
 
       result[teamId] ??= {};
       result[teamId][month] ??= { STORY: 0, IMAGE: 0, VIDEO: 0, REEL: 0 };
@@ -143,7 +142,6 @@ export class AnalyticsService {
     return result;
   }
 
-  // ✅ 3. Admin: Pie chart data - team contribution to all content
   async getTeamContributionPie(): Promise<Record<string, Record<string, number>>> {
     const raw = await this.activityRepo
       .createQueryBuilder('a')
@@ -160,8 +158,9 @@ export class AnalyticsService {
     const result: Record<string, Record<string, number>> = {};
 
     for (const row of raw) {
+      if (!row.teamId) continue;
       const teamId = row.teamId;
-      const media = row.mediaType;
+      const media = row.mediaType.toUpperCase();
       result[teamId] ??= {};
       result[teamId][media] = parseInt(row.count, 10);
     }
@@ -169,7 +168,6 @@ export class AnalyticsService {
     return result;
   }
 
-  // ✅ 4. Admin: Count ambassadors following all rules
   async getOverallComplianceRate(start?: Date, end?: Date): Promise<number> {
     const all = await this.generateWeeklyCompliance(start, end);
     return all.filter((a) =>
@@ -179,7 +177,6 @@ export class AnalyticsService {
     ).length;
   }
 
-  // ✅ 5. Leader: Count compliant ambassadors in specific team
   async getTeamComplianceRate(leaderId: string, start?: Date, end?: Date): Promise<number> {
     const teamResults = await this.getTeamCompliance(leaderId, start, end);
     return teamResults.filter((a) =>
@@ -188,7 +185,6 @@ export class AnalyticsService {
       a.compliance.reel === 'green'
     ).length;
   }
-
 
   async getUserWeeklyCompliance(
     userId: string,
@@ -227,9 +223,9 @@ export class AnalyticsService {
 
     return {
       actual: {
-        stories: countMap['STORY'],
-        posts: countMap['IMAGE'],
-        reels: countMap['VIDEO'],
+        stories: countMap.STORY,
+        posts: countMap.IMAGE,
+        reels: countMap.VIDEO,
       },
       expected: {
         stories: globalRule?.stories_per_week ?? 3,
@@ -237,18 +233,14 @@ export class AnalyticsService {
         reels: globalRule?.reels_per_week ?? 1,
       },
       compliance: {
-        story: countMap['STORY'] >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
-        post: countMap['IMAGE'] >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
-        reel: countMap['VIDEO'] >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
+        story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
+        post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
+        reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
       },
     };
   }
 
-  async getTeamCompliance(
-    leaderId: string,
-    startDate?: Date,
-    endDate?: Date,
-  ): Promise<AmbassadorSummary[]> {
+  async getTeamCompliance(leaderId: string, startDate?: Date, endDate?: Date): Promise<AmbassadorSummary[]> {
     const now = new Date();
     const from = startDate || new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
     const to = endDate || now;
@@ -289,7 +281,7 @@ export class AnalyticsService {
         photoUrl: member.user.photoUrl,
         role: member.user.role,
         active: member.user.active,
-        edits: [], // ✅ Required field provided
+        edits: [],
         actual: {
           stories: countMap.STORY,
           posts: countMap.IMAGE,
@@ -311,105 +303,104 @@ export class AnalyticsService {
     return results;
   }
 
-async getMonthlyActivityForTeam(leaderId: string) {
-  const team = await this.teamRepo
-    .createQueryBuilder('team')
-    .leftJoinAndSelect('team.members', 'teamMember')
-    .leftJoinAndSelect('teamMember.user', 'user')
-    .where('team.leaderId = :leaderId', { leaderId })
-    .getOne();
+  async getMonthlyActivityForTeam(leaderId: string) {
+    const team = await this.teamRepo
+      .createQueryBuilder('team')
+      .leftJoinAndSelect('team.members', 'teamMember')
+      .leftJoinAndSelect('teamMember.user', 'user')
+      .where('team.leaderId = :leaderId', { leaderId })
+      .getOne();
 
-  if (!team) return [];
+    if (!team) return [];
 
-  const instagramIds = team.members.map(m => m.user.instagram);
-  if (instagramIds.length === 0) return [];
+    const instagramIds = team.members.map(m => m.user.instagram);
+    if (instagramIds.length === 0) return [];
 
-  const result = await this.activityRepo
-    .createQueryBuilder('activity')
-    .select("TO_CHAR(activity.timestamp, 'YYYY-MM')", 'month')
-    .addSelect('activity.mediaType', 'mediaType')
-    .addSelect('COUNT(*)', 'count')
-    .where('activity.userInstagramId IN (:...instagramIds)', { instagramIds })
-    .groupBy("TO_CHAR(activity.timestamp, 'YYYY-MM')")
-    .addGroupBy('activity.mediaType')
-    .orderBy("TO_CHAR(activity.timestamp, 'YYYY-MM')")
-    .getRawMany();
+    const result = await this.activityRepo
+      .createQueryBuilder('activity')
+      .select("TO_CHAR(activity.timestamp, 'YYYY-MM')", 'month')
+      .addSelect('activity.mediaType', 'mediaType')
+      .addSelect('COUNT(*)', 'count')
+      .where('activity.userInstagramId IN (:...instagramIds)', { instagramIds })
+      .groupBy("TO_CHAR(activity.timestamp, 'YYYY-MM')")
+      .addGroupBy('activity.mediaType')
+      .orderBy("TO_CHAR(activity.timestamp, 'YYYY-MM')")
+      .getRawMany();
 
-  const grouped: Record<string, { stories: number; posts: number; reels: number }> = {};
-  for (const row of result) {
-    const month = row.month;
-    const media = row.mediaType.toUpperCase();
-    const count = parseInt(row.count, 10);
+    const grouped: Record<string, { stories: number; posts: number; reels: number }> = {};
+    for (const row of result) {
+      const month = row.month;
+      const media = row.mediaType.toUpperCase();
+      const count = parseInt(row.count, 10);
 
-    if (!grouped[month]) {
-      grouped[month] = { stories: 0, posts: 0, reels: 0 };
+      if (!grouped[month]) {
+        grouped[month] = { stories: 0, posts: 0, reels: 0 };
+      }
+
+      if (media === 'STORY') grouped[month].stories += count;
+      if (media === 'IMAGE') grouped[month].posts += count;
+      if (media === 'VIDEO') grouped[month].reels += count;
     }
 
-    if (media === 'STORY') grouped[month].stories += count;
-    if (media === 'IMAGE') grouped[month].posts += count;
-    if (media === 'VIDEO') grouped[month].reels += count;
+    return Object.entries(grouped).map(([month, counts]) => ({ month, ...counts }));
   }
 
-  return Object.entries(grouped).map(([month, counts]) => ({ month, ...counts }));
-}
+  async getTeamComplianceTrend(leaderId: string) {
+    const team = await this.teamRepo
+      .createQueryBuilder('team')
+      .leftJoinAndSelect('team.members', 'teamMember')
+      .leftJoinAndSelect('teamMember.user', 'user')
+      .where('team.leaderId = :leaderId', { leaderId })
+      .getOne();
 
-async getTeamComplianceTrend(leaderId: string) {
-  const team = await this.teamRepo
-    .createQueryBuilder('team')
-    .leftJoinAndSelect('team.members', 'teamMember')
-    .leftJoinAndSelect('teamMember.user', 'user')
-    .where('team.leaderId = :leaderId', { leaderId })
-    .getOne();
+    if (!team) return [];
 
-  if (!team) return [];
+    const globalRule = await this.rulesRepo.findOne({ where: {} });
+    const instagramIds = team.members.map(m => m.user.instagram);
+    if (instagramIds.length === 0) return [];
 
-  const globalRule = await this.rulesRepo.findOne({ where: {} });
-  const instagramIds = team.members.map(m => m.user.instagram);
-  if (instagramIds.length === 0) return [];
+    const raw = await this.activityRepo
+      .createQueryBuilder('activity')
+      .select("TO_CHAR(activity.timestamp, 'YYYY-MM')", 'month')
+      .addSelect('activity.userInstagramId', 'userInstagramId')
+      .addSelect('activity.mediaType', 'mediaType')
+      .addSelect('COUNT(*)', 'count')
+      .where('activity.userInstagramId IN (:...instagramIds)', { instagramIds })
+      .groupBy("TO_CHAR(activity.timestamp, 'YYYY-MM')")
+      .addGroupBy('activity.userInstagramId')
+      .addGroupBy('activity.mediaType')
+      .orderBy("TO_CHAR(activity.timestamp, 'YYYY-MM')")
+      .getRawMany();
 
-  const raw = await this.activityRepo
-    .createQueryBuilder('activity')
-    .select("TO_CHAR(activity.timestamp, 'YYYY-MM')", 'month')
-    .addSelect('activity.userInstagramId', 'userInstagramId')
-    .addSelect('activity.mediaType', 'mediaType')
-    .addSelect('COUNT(*)', 'count')
-    .where('activity.userInstagramId IN (:...instagramIds)', { instagramIds })
-    .groupBy("TO_CHAR(activity.timestamp, 'YYYY-MM')")
-    .addGroupBy('activity.userInstagramId')
-    .addGroupBy('activity.mediaType')
-    .orderBy("TO_CHAR(activity.timestamp, 'YYYY-MM')")
-    .getRawMany();
+    const complianceMap: Record<string, Record<string, number>> = {};
 
-  const complianceMap: Record<string, Record<string, number>> = {};
+    for (const row of raw) {
+      const month = row.month;
+      const uid = row.userInstagramId;
+      const media = row.mediaType.toUpperCase();
+      const count = parseInt(row.count, 10);
 
-  for (const row of raw) {
-    const month = row.month;
-    const uid = row.userInstagramId;
-    const media = row.mediaType.toUpperCase();
-    const count = parseInt(row.count, 10);
+      if (!complianceMap[month]) complianceMap[month] = {};
+      if (!complianceMap[month][uid]) complianceMap[month][uid] = 0;
 
-    if (!complianceMap[month]) complianceMap[month] = {};
-    if (!complianceMap[month][uid]) complianceMap[month][uid] = 0;
+      const rules = {
+        STORY: globalRule?.stories_per_week ?? 3,
+        IMAGE: globalRule?.posts_per_week ?? 1,
+        VIDEO: globalRule?.reels_per_week ?? 1,
+      };
 
-    const rules = {
-      STORY: globalRule?.stories_per_week ?? 3,
-      IMAGE: globalRule?.posts_per_week ?? 1,
-      VIDEO: globalRule?.reels_per_week ?? 1,
-    };
+      const meets = (media === 'STORY' && count >= rules.STORY)
+        || (media === 'IMAGE' && count >= rules.IMAGE)
+        || (media === 'VIDEO' && count >= rules.VIDEO);
 
-    const meets = (media === 'STORY' && count >= rules.STORY)
-      || (media === 'IMAGE' && count >= rules.IMAGE)
-      || (media === 'VIDEO' && count >= rules.VIDEO);
-
-    if (meets) {
-      complianceMap[month][uid]++;
+      if (meets) {
+        complianceMap[month][uid]++;
+      }
     }
+
+    return Object.entries(complianceMap).map(([month, userMap]) => {
+      const compliant = Object.values(userMap).filter(v => v >= 3).length;
+      return { month, compliant };
+    });
   }
-
-  return Object.entries(complianceMap).map(([month, userMap]) => {
-    const compliant = Object.values(userMap).filter((v) => v >= 3).length;
-    return { month, compliant };
-  });
-}
-
 }
