@@ -52,18 +52,15 @@ async getComplianceForUser(
   };
 }
 
- // ✅ 1. Admin - Monthly ambassador activity
-  @Get('monthly-activity')
-  getMonthlyActivity() {
-    return this.analyticsService.getMonthlyActivity();
-  }
-
-  @Get('monthly-activity')
-  async getMonthlyActivityForTeam(
-    @Query('leaderId') leaderId: string,
-  ) {
+ @Get('monthly-activity')
+async getMonthlyActivity(
+  @Query('leaderId') leaderId?: string,
+) {
+  if (leaderId) {
     return this.analyticsService.getMonthlyActivityForTeam(leaderId);
   }
+  return this.analyticsService.getMonthlyActivity();
+}
 
   // ✅ 2. Admin - Monthly activity per team
   @Get('team-monthly-activity')
