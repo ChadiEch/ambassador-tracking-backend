@@ -310,4 +310,106 @@ export class AnalyticsService {
 
     return results;
   }
+
+async getMonthlyActivityForTeam(leaderId: string) {
+  const team = await this.teamRepo
+    .createQueryBuilder('team')
+    .leftJoinAndSelect('team.members', 'teamMember')
+    .leftJoinAndSelect('teamMember.user', 'user')
+    .where('team.leaderId = :leaderId', { leaderId })
+    .getOne();
+
+  if (!team) return [];
+
+  const instagramIds = team.members.map(m => m.user.instagram);
+  if (instagramIds.length === 0) return [];
+
+  const result = await this.activityRepo
+    .createQueryBuilder('activity')
+    .select("TO_CHAR(activity.timestamp, 'YYYY-MM')", 'month')
+    .addSelect('activity.mediaType', 'mediaType')
+    .addSelect('COUNT(*)', 'count')
+    .where('activity.userInstagramId IN (:...instagramIds)', { instagramIds })
+    .groupBy("TO_CHAR(activity.timestamp, 'YYYY-MM')")
+    .addGroupBy('activity.mediaType')
+    .orderBy("TO_CHAR(activity.timestamp, 'YYYY-MM')")
+    .getRawMany();
+
+  const grouped: Record<string, { stories: number; posts: number; reels: number }> = {};
+  for (const row of result) {
+    const month = row.month;
+    const media = row.mediaType.toUpperCase();
+    const count = parseInt(row.count, 10);
+
+    if (!grouped[month]) {
+      grouped[month] = { stories: 0, posts: 0, reels: 0 };
+    }
+
+    if (media === 'STORY') grouped[month].stories += count;
+    if (media === 'IMAGE') grouped[month].posts += count;
+    if (media === 'VIDEO') grouped[month].reels += count;
+  }
+
+  return Object.entries(grouped).map(([month, counts]) => ({ month, ...counts }));
+}
+
+async getTeamComplianceTrend(leaderId: string) {
+  const team = await this.teamRepo
+    .createQueryBuilder('team')
+    .leftJoinAndSelect('team.members', 'teamMember')
+    .leftJoinAndSelect('teamMember.user', 'user')
+    .where('team.leaderId = :leaderId', { leaderId })
+    .getOne();
+
+  if (!team) return [];
+
+  const globalRule = await this.rulesRepo.findOne({ where: {} });
+  const instagramIds = team.members.map(m => m.user.instagram);
+  if (instagramIds.length === 0) return [];
+
+  const raw = await this.activityRepo
+    .createQueryBuilder('activity')
+    .select("TO_CHAR(activity.timestamp, 'YYYY-MM')", 'month')
+    .addSelect('activity.userInstagramId', 'userInstagramId')
+    .addSelect('activity.mediaType', 'mediaType')
+    .addSelect('COUNT(*)', 'count')
+    .where('activity.userInstagramId IN (:...instagramIds)', { instagramIds })
+    .groupBy("TO_CHAR(activity.timestamp, 'YYYY-MM')")
+    .addGroupBy('activity.userInstagramId')
+    .addGroupBy('activity.mediaType')
+    .orderBy("TO_CHAR(activity.timestamp, 'YYYY-MM')")
+    .getRawMany();
+
+  const complianceMap: Record<string, Record<string, number>> = {};
+
+  for (const row of raw) {
+    const month = row.month;
+    const uid = row.userInstagramId;
+    const media = row.mediaType.toUpperCase();
+    const count = parseInt(row.count, 10);
+
+    if (!complianceMap[month]) complianceMap[month] = {};
+    if (!complianceMap[month][uid]) complianceMap[month][uid] = 0;
+
+    const rules = {
+      STORY: globalRule?.stories_per_week ?? 3,
+      IMAGE: globalRule?.posts_per_week ?? 1,
+      VIDEO: globalRule?.reels_per_week ?? 1,
+    };
+
+    const meets = (media === 'STORY' && count >= rules.STORY)
+      || (media === 'IMAGE' && count >= rules.IMAGE)
+      || (media === 'VIDEO' && count >= rules.VIDEO);
+
+    if (meets) {
+      complianceMap[month][uid]++;
+    }
+  }
+
+  return Object.entries(complianceMap).map(([month, userMap]) => {
+    const compliant = Object.values(userMap).filter((v) => v >= 3).length;
+    return { month, compliant };
+  });
+}
+
 }

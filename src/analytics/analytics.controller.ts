@@ -58,6 +58,13 @@ async getComplianceForUser(
     return this.analyticsService.getMonthlyActivity();
   }
 
+  @Get('monthly-activity')
+  async getMonthlyActivityForTeam(
+    @Query('leaderId') leaderId: string,
+  ) {
+    return this.analyticsService.getMonthlyActivityForTeam(leaderId);
+  }
+
   // ✅ 2. Admin - Monthly activity per team
   @Get('team-monthly-activity')
   getTeamMonthlyActivity() {
@@ -92,4 +99,11 @@ async getComplianceForUser(
     const to = end ? new Date(end) : undefined;
     return this.analyticsService.getTeamComplianceRate(leaderId, from, to);
   }
+  @Get('team-compliance-stats')
+  async getTeamComplianceStats(
+    @Query('leaderId') leaderId: string,
+  ) {
+    return this.analyticsService.getTeamComplianceTrend(leaderId);
+  }
+
 }
