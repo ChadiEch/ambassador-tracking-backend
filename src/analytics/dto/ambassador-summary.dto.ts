@@ -19,5 +19,5 @@ export interface AmbassadorSummary {
   role?: 'ambassador' | 'leader'; // ✅ Add this
   active?: boolean;   
   photoUrl?: string; // ✅ Add this line
-            // ✅ Add this
+  lastActivity?: Date; // ✅ New
 }

@@ -24,68 +24,80 @@ export class AnalyticsService {
     private teamRepo: Repository<Team>,
   ) {}
 
-  async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<AmbassadorSummary[]> {
-    const now = new Date();
-    const defaultStart = new Date(now);
-    defaultStart.setDate(now.getDate() - now.getDay());
+async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<AmbassadorSummary[]> {
+  const now = new Date();
+  const defaultStart = new Date(now);
+  defaultStart.setDate(now.getDate() - now.getDay());
 
-    const from = startDate || defaultStart;
-    const to = endDate || now;
+  const from = startDate || defaultStart;
+  const to = endDate || now;
 
-    const users = await this.userRepo.find();
-    const globalRule = await this.rulesRepo.findOne({ where: {} });
-    const results: AmbassadorSummary[] = [];
+  const users = await this.userRepo.find();
+  const globalRule = await this.rulesRepo.findOne({ where: {} });
+  const results: AmbassadorSummary[] = [];
 
-    for (const user of users) {
-      const counts = await this.activityRepo
-        .createQueryBuilder('a')
-        .select('a.mediaType', 'mediaType')
-        .addSelect('COUNT(*)', 'count')
-        .where('a.userInstagramId = :uid', { uid: user.instagram })
-        .andWhere('a.timestamp BETWEEN :start AND :end', {
-          start: from.toISOString(),
-          end: to.toISOString(),
-        })
-        .groupBy('a.mediaType')
-        .getRawMany();
+  for (const user of users) {
+    const counts = await this.activityRepo
+      .createQueryBuilder('a')
+      .select('a.mediaType', 'mediaType')
+      .addSelect('COUNT(*)', 'count')
+      .where('a.userInstagramId = :uid', { uid: user.instagram })
+      .andWhere('a.timestamp BETWEEN :start AND :end', {
+        start: from.toISOString(),
+        end: to.toISOString(),
+      })
+      .groupBy('a.mediaType')
+      .getRawMany();
 
-      const countMap: Record<string, number> = {
-        STORY: 0,
-        IMAGE: 0,
-        VIDEO: 0,
-      };
+    const countMap: Record<string, number> = {
+      STORY: 0,
+      IMAGE: 0,
+      VIDEO: 0,
+    };
 
-      for (const row of counts) {
-        countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
-      }
-
-      results.push({
-        id: user.id,
-        name: user.name,
-        photoUrl: user.photoUrl,
-        role: user.role,
-        active: user.active,
-        edits: [],
-        actual: {
-          stories: countMap.STORY,
-          posts: countMap.IMAGE,
-          reels: countMap.VIDEO,
-        },
-        expected: {
-          stories: globalRule?.stories_per_week ?? 3,
-          posts: globalRule?.posts_per_week ?? 1,
-          reels: globalRule?.reels_per_week ?? 1,
-        },
-        compliance: {
-          story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
-          post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
-          reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
-        },
-      });
+    for (const row of counts) {
+      countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
     }
 
-    return results;
+    // ✅ Get last activity timestamp for the user
+    const lastActivity = await this.activityRepo
+      .createQueryBuilder('a')
+      .select('a.timestamp', 'timestamp')
+      .where('a.userInstagramId = :uid', { uid: user.instagram })
+      .orderBy('a.timestamp', 'DESC')
+      .limit(1)
+      .getRawOne();
+
+    results.push({
+      id: user.id,
+      name: user.name,
+      photoUrl: user.photoUrl,
+      role: user.role,
+      active: user.active,
+      edits: [], // if needed
+      actual: {
+        stories: countMap.STORY,
+        posts: countMap.IMAGE,
+        reels: countMap.VIDEO,
+      },
+      expected: {
+        stories: globalRule?.stories_per_week ?? 3,
+        posts: globalRule?.posts_per_week ?? 1,
+        reels: globalRule?.reels_per_week ?? 1,
+      },
+      compliance: {
+        story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
+        post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
+        reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
+      },
+      // ✅ Add lastActivity field
+      lastActivity: lastActivity?.timestamp || null,
+    });
   }
+
+  return results;
+}
+
 
   async getMonthlyActivity(): Promise<Record<string, Record<string, number>>> {
     const raw = await this.activityRepo
