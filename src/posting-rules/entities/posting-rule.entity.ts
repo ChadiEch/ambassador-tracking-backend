@@ -6,8 +6,6 @@ export class PostingRule {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-
-
   @Column({ default: 0 })
   stories_per_week: number;
 
@@ -16,8 +14,8 @@ export class PostingRule {
 
   @Column({ default: 0 })
   reels_per_week: number;
-@Column({ type: 'text', nullable: true })
-rulesText: string;
-
+  
+  @Column({ type: 'text', nullable: true })
+  rulesText: string;
 
 }

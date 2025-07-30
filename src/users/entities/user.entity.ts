@@ -52,18 +52,18 @@ export class User {
   note?: string;
 
   @Column({ nullable: true })
-photoUrl?: string;
+  photoUrl?: string;
 
+  // NEW link field
+  @Column({ nullable: true })
+  link?: string;
 
   @OneToMany(() => TeamMember, (teamMember) => teamMember.user)
   teamMemberships: TeamMember[];
 
   @OneToMany(() => Note, (note) => note.author)
-authoredNotes: Note[];
+  authoredNotes: Note[];
 
-  
-@OneToMany(() => AmbassadorActivity, (activity) => activity.user)
-activities: AmbassadorActivity[];
-
-
+  @OneToMany(() => AmbassadorActivity, (activity) => activity.user)
+  activities: AmbassadorActivity[];
 }

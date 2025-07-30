@@ -30,12 +30,15 @@ export class CreateUserDto {
   participationDate?: string;
 
   @IsOptional()
-@IsString()
-note?: string;
+  @IsString()
+  note?: string;
 
-@IsOptional()
-@IsString()
-photoUrl?: string;
+  @IsOptional()
+  @IsString()
+  photoUrl?: string;
 
-
+  // NEW link field
+  @IsOptional()
+  @IsString()
+  link?: string;
 }
