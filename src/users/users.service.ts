@@ -18,9 +18,16 @@ constructor(
     return this.userRepository.save(user);
   }
 
-  async findAll() {
-    return this.userRepository.find();
-  }
+ async findAll() {
+  return this.userRepository
+    .createQueryBuilder('u')
+    .leftJoinAndSelect('u.warnings', 'w')
+    .loadRelationCountAndMap('u.warningsCount', 'u.warnings', 'w', qb =>
+      qb.andWhere('w.active = true'),
+    )
+    .getMany();
+}
+
 
   async findOne(id: string) {
     return this.userRepository.findOne({ where: { id } });
@@ -46,4 +53,13 @@ async remove(id: string) {
     user.active = !user.active;
     return this.userRepository.save(user);
   }
+  async deactivate(id: string, reason: string) {
+  const user = await this.findOne(id);
+  if (!user) throw new NotFoundException(`User with ID ${id} not found`);
+
+  user.active = false;
+  user.deactivationReason = reason; // Add column in User entity
+  return this.userRepository.save(user);
+}
+
 }
