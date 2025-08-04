@@ -42,7 +42,7 @@ import { WarningsModule } from './warnings/warnings.module'; // ✅ New warnings
         secure: false,
         auth: {
           user: process.env.SMTP_USER || 'username',
-          pass: process.env.SMTP_PASS || 'password',
+          pass: 'railway',
         },
       },
       defaults: {
