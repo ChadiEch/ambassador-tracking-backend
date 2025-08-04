@@ -19,7 +19,6 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsDateString()
   dob?: string;
 
-  // NEW link field (explicitly added)
   @IsOptional()
   @IsString()
   link?: string;

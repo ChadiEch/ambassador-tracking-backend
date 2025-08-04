@@ -23,10 +23,13 @@ export class UsersController {
     return this.usersService.findOne(id);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
-  }
+  // users.controller.ts
+@Patch(':id')
+async update(@Param('id') id: string, @Body() body: UpdateUserDto) {
+  console.log('Incoming PATCH:', id, body); // 🔍
+  return this.usersService.update(id, body);
+}
+
 
   @Patch(':id/toggle')
   toggleActive(@Param('id') id: string) {
