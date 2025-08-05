@@ -75,6 +75,9 @@ export class User {
 
   @Column({ type: 'timestamptz', nullable: true })
   warningPausedUntil?: Date;
+  @Column({ default: 0, nullable: false })
+warningsCount: number;
+
 
   @Column({ type: 'text', nullable: true })
   deactivationReason?: string;
