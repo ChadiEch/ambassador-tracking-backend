@@ -49,11 +49,13 @@ export class UsersController {
     return this.usersService.remove(id);
   }
 
- @Post(':id/deactivate-with-feedback')
+@Post(':id/deactivate-with-feedback')
 async deactivateWithFeedback(
   @Param('id') userId: string,
   @Body() body: CreateDeactivationDto,
 ) {
+  console.log('Incoming deactivation for user ID:', userId); // ✅
   return this.usersService.deactivateWithFeedback(userId, body);
 }
+
 }
