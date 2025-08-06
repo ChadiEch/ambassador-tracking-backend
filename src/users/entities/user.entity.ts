@@ -10,7 +10,7 @@ import { TeamMember } from 'src/team-members/entities/team-member.entity';
 import { AmbassadorActivity } from 'src/entities/ambassador-activity.entity';
 import { Note } from 'src/notes/entities/note.entity';
 import { Warning } from 'src/warnings/entities/warning.entity';
-
+import { UserDeactivation } from './UserDeactivation.entity';
 @Entity()
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -81,5 +81,9 @@ warningsCount: number;
 
   @Column({ type: 'text', nullable: true })
   deactivationReason?: string;
+
+  @OneToMany(() => UserDeactivation, d => d.user)
+deactivations: UserDeactivation[];
+
 }
 

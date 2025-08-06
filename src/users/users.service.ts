@@ -1,65 +1,119 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource  } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UserDeactivation } from './entities/UserDeactivation.entity';
 
 @Injectable()
 export class UsersService {
-constructor(
-  @InjectRepository(User)
-  private readonly userRepository: Repository<User>,
-  private readonly dataSource: DataSource, // inject DataSource to run raw queries
-) {}
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
 
+    @InjectRepository(UserDeactivation)
+    private readonly deactivationRepo: Repository<UserDeactivation>,
+
+    private readonly dataSource: DataSource, // Used for raw SQL
+  ) {}
+
+  /**
+   * Create a new user
+   */
   async create(createUserDto: CreateUserDto) {
     const user = this.userRepository.create(createUserDto);
     return this.userRepository.save(user);
   }
 
- async findAll() {
-  return this.userRepository
-    .createQueryBuilder('u')
-    .leftJoinAndSelect('u.warnings', 'w')
-    .loadRelationCountAndMap('u.warningsCount', 'u.warnings', 'w', qb =>
-      qb.andWhere('w.active = true'),
-    )
-    .getMany();
-}
+  /**
+   * Get all users with warning count
+   */
+  async findAll() {
+    return this.userRepository
+      .createQueryBuilder('u')
+      .leftJoinAndSelect('u.warnings', 'w')
+      .loadRelationCountAndMap(
+        'u.warningsCount',
+        'u.warnings',
+        'w',
+        (qb) => qb.andWhere('w.active = true'),
+      )
+      .getMany();
+  }
 
-
+  /**
+   * Get one user by ID
+   */
   async findOne(id: string) {
     return this.userRepository.findOne({ where: { id } });
   }
 
+  /**
+   * Update user by ID
+   */
   async update(id: string, updateUserDto: UpdateUserDto) {
     await this.userRepository.update(id, updateUserDto);
     return this.findOne(id);
   }
 
-async remove(id: string) {
-  // Step 1: Remove references from `team_member` table manually
-  await this.dataSource.query(
-    `DELETE FROM team_member WHERE "userId" = $1`,
-    [id],
-  );
-  // Step 2: Safely delete the user
-  return this.userRepository.delete(id);
-}
+  /**
+   * Remove a user and clean up from team_member join table
+   */
+  async remove(id: string) {
+    // Remove references from join table manually
+    await this.dataSource.query(`DELETE FROM team_member WHERE "userId" = $1`, [id]);
+
+    // Delete user
+    return this.userRepository.delete(id);
+  }
+
+  /**
+   * Toggle active status of user
+   */
   async toggleActive(id: string) {
     const user = await this.findOne(id);
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
+
     user.active = !user.active;
     return this.userRepository.save(user);
   }
+
+  /**
+   * Simple deactivation with reason
+   */
   async deactivate(id: string, reason: string) {
-  const user = await this.findOne(id);
-  if (!user) throw new NotFoundException(`User with ID ${id} not found`);
+    const user = await this.findOne(id);
+    if (!user) throw new NotFoundException(`User with ID ${id} not found`);
 
-  user.active = false;
-  user.deactivationReason = reason; // Add column in User entity
-  return this.userRepository.save(user);
-}
+    user.active = false;
+    user.deactivationReason = reason; // Make sure this field exists in the User entity
+    return this.userRepository.save(user);
+  }
 
+  /**
+   * Deactivate user with feedback and log to UserDeactivation table
+   */
+  async deactivateWithFeedback(
+    userId: string,
+    feedback: { reason: string; rating: number; note?: string; date: string },
+  ) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    user.active = false;
+    await this.userRepository.save(user);
+
+    const deactivation = this.deactivationRepo.create({
+      user,
+      reason: feedback.reason,
+      rating: feedback.rating,
+      note: feedback.note,
+      date: new Date(feedback.date),
+    });
+
+    await this.deactivationRepo.save(deactivation);
+
+    return { success: true };
+  }
 }

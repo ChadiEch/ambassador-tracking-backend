@@ -1,5 +1,14 @@
 // src/users/users.controller.ts
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  NotFoundException,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -23,13 +32,11 @@ export class UsersController {
     return this.usersService.findOne(id);
   }
 
-  // users.controller.ts
-@Patch(':id')
-async update(@Param('id') id: string, @Body() body: UpdateUserDto) {
-  console.log('Incoming PATCH:', id, body); // 🔍
-  return this.usersService.update(id, body);
-}
-
+  @Patch(':id')
+  async update(@Param('id') id: string, @Body() body: UpdateUserDto) {
+    console.log('Incoming PATCH:', id, body);
+    return this.usersService.update(id, body);
+  }
 
   @Patch(':id/toggle')
   toggleActive(@Param('id') id: string) {
@@ -39,5 +46,19 @@ async update(@Param('id') id: string, @Body() body: UpdateUserDto) {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);
+  }
+
+  @Post(':id/deactivate-with-feedback')
+  async deactivateWithFeedback(
+    @Param('id') userId: string,
+    @Body()
+    body: {
+      reason: string;
+      rating: number;
+      note?: string;
+      date: string;
+    },
+  ) {
+    return this.usersService.deactivateWithFeedback(userId, body);
   }
 }
