@@ -15,7 +15,7 @@ export class UsersService {
     @InjectRepository(UserDeactivation)
     private readonly deactivationRepo: Repository<UserDeactivation>,
 
-    private readonly dataSource: DataSource, // For raw SQL queries
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -27,12 +27,13 @@ export class UsersService {
   }
 
   /**
-   * Get all users with warning count
+   * Get all users including warning count and deactivations
    */
   async findAll() {
     return this.userRepository
       .createQueryBuilder('u')
       .leftJoinAndSelect('u.warnings', 'w')
+      .leftJoinAndSelect('u.deactivations', 'deactivation')
       .loadRelationCountAndMap(
         'u.warningsCount',
         'u.warnings',
@@ -46,7 +47,10 @@ export class UsersService {
    * Get one user by ID
    */
   async findOne(id: string) {
-    return this.userRepository.findOne({ where: { id } });
+    return this.userRepository.findOne({
+      where: { id },
+      relations: ['deactivations'],
+    });
   }
 
   /**
@@ -61,10 +65,7 @@ export class UsersService {
    * Remove a user and clean up from team_member join table
    */
   async remove(id: string) {
-    // Remove references from join table manually
     await this.dataSource.query(`DELETE FROM team_member WHERE "userId" = $1`, [id]);
-
-    // Delete user
     return this.userRepository.delete(id);
   }
 
@@ -80,14 +81,14 @@ export class UsersService {
   }
 
   /**
-   * Simple deactivation with reason
+   * Simple deactivation with reason (legacy)
    */
   async deactivate(id: string, reason: string) {
     const user = await this.findOne(id);
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
 
     user.active = false;
-    user.deactivationReason = reason; // Ensure this field exists in User entity
+    user.deactivationReason = reason;
     return this.userRepository.save(user);
   }
 
