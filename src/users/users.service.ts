@@ -27,25 +27,18 @@ export class UsersService {
   }
 
   /**
-   * Get all users with warning count and latest deactivation info
+   * Get all users including warning count and deactivations
    */
   async findAll() {
     return this.userRepository
       .createQueryBuilder('u')
       .leftJoinAndSelect('u.warnings', 'w')
+      .leftJoinAndSelect('u.deactivations', 'deactivation')
       .loadRelationCountAndMap(
         'u.warningsCount',
         'u.warnings',
         'w',
         (qb) => qb.andWhere('w.active = true'),
-      )
-      .leftJoinAndMapOne(
-        'u.latestDeactivation',
-        UserDeactivation,
-        'latestDeactivation',
-        'latestDeactivation."userId" = u.id AND latestDeactivation.date = (' +
-          'SELECT MAX(d2.date) FROM user_deactivation d2 WHERE d2."userId" = u.id' +
-        ')'
       )
       .getMany();
   }
@@ -88,7 +81,7 @@ export class UsersService {
   }
 
   /**
-   * Legacy simple deactivation
+   * Simple deactivation with reason (legacy)
    */
   async deactivate(id: string, reason: string) {
     const user = await this.findOne(id);
