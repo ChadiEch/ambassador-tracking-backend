@@ -12,6 +12,7 @@ import {
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CreateDeactivationDto } from './dto/create-deactivation.dto';
 
 @Controller('admin/users') // Matches frontend routes like /admin/users
 export class UsersController {
@@ -48,17 +49,11 @@ export class UsersController {
     return this.usersService.remove(id);
   }
 
-  @Post(':id/deactivate-with-feedback')
-  async deactivateWithFeedback(
-    @Param('id') userId: string,
-    @Body()
-    body: {
-      reason: string;
-      rating: number;
-      note?: string;
-      date: string;
-    },
-  ) {
-    return this.usersService.deactivateWithFeedback(userId, body);
-  }
+ @Post(':id/deactivate-with-feedback')
+async deactivateWithFeedback(
+  @Param('id') userId: string,
+  @Body() body: CreateDeactivationDto,
+) {
+  return this.usersService.deactivateWithFeedback(userId, body);
+}
 }
