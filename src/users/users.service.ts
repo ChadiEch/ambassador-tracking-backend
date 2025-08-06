@@ -15,7 +15,7 @@ export class UsersService {
     @InjectRepository(UserDeactivation)
     private readonly deactivationRepo: Repository<UserDeactivation>,
 
-    private readonly dataSource: DataSource, // Used for raw SQL
+    private readonly dataSource: DataSource, // For raw SQL queries
   ) {}
 
   /**
@@ -87,7 +87,7 @@ export class UsersService {
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
 
     user.active = false;
-    user.deactivationReason = reason; // Make sure this field exists in the User entity
+    user.deactivationReason = reason; // Ensure this field exists in User entity
     return this.userRepository.save(user);
   }
 
@@ -99,7 +99,7 @@ export class UsersService {
     feedback: { reason: string; rating: number; note?: string; date: string },
   ) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException(`User with ID ${userId} not found`);
 
     user.active = false;
     await this.userRepository.save(user);

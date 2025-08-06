@@ -1,20 +1,19 @@
-import { IsNotEmpty, IsOptional, IsString, IsNumber, IsDateString, Min, Max } from 'class-validator';
+// src/users/dto/create-deactivation.dto.ts
+import { IsString, IsNotEmpty, IsOptional, IsNumber } from 'class-validator';
 
 export class CreateDeactivationDto {
-  @IsNotEmpty()
   @IsString()
+  @IsNotEmpty()
   reason: string;
 
   @IsNumber()
-  @Min(1)
-  @Max(10)
   rating: number;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   note?: string;
 
+  @IsString()
   @IsNotEmpty()
-  @IsDateString()
   date: string;
 }
