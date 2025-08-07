@@ -56,10 +56,16 @@ export class UsersService {
   /**
    * Update user by ID
    */
-  async update(id: string, updateUserDto: UpdateUserDto) {
-    await this.userRepository.update(id, updateUserDto);
-    return this.findOne(id);
-  }
+async update(id: string, updateUserDto: UpdateUserDto) {
+  const user = await this.userRepository.findOne({ where: { id } });
+  if (!user) throw new NotFoundException('User not found');
+
+  const updated = this.userRepository.merge(user, updateUserDto);
+  await this.userRepository.save(updated);
+
+  return this.findOne(id);
+}
+
 
   /**
    * Remove a user and clean up from team_member join table
