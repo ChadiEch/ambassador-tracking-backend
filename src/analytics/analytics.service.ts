@@ -7,6 +7,10 @@ import { PostingRule } from '../posting-rules/entities/posting-rule.entity';
 import type { AmbassadorSummary } from './dto/ambassador-summary.dto';
 import { AmbassadorComplianceData } from './dto/ambassador-compliance.dto';
 import { Team } from 'src/teams/entities/team.entity';
+type TeamContribution = {
+  teamId: string;
+  [mediaType: string]: number | string;
+};
 
 @Injectable()
 export class AnalyticsService {
@@ -22,6 +26,7 @@ export class AnalyticsService {
 
     @InjectRepository(Team)
     private teamRepo: Repository<Team>,
+    
   ) {}
 
 async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<AmbassadorSummary[]> {
@@ -154,31 +159,41 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
     return result;
   }
 
-  async getTeamContributionPie(): Promise<Record<string, Record<string, number>>> {
-    const raw = await this.activityRepo
-      .createQueryBuilder('a')
-      .leftJoin('a.user', 'user')
-      .leftJoin('user.teamMemberships', 'membership')
-      .leftJoin('membership.team', 'team')
-      .select('team.id', 'teamId')
-      .addSelect('a.mediaType', 'mediaType')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('team.id')
-      .addGroupBy('a.mediaType')
-      .getRawMany();
 
-    const result: Record<string, Record<string, number>> = {};
+  async getTeamContributionPie(): Promise<TeamContribution[]> {
+  const raw = await this.activityRepo
+    .createQueryBuilder('a')
+    .leftJoin('a.user', 'user')
+    .leftJoin('user.teamMemberships', 'membership')
+    .leftJoin('membership.team', 'team')
+    .select('team.id', 'teamId')
+    .addSelect('a.mediaType', 'mediaType')
+    .addSelect('COUNT(*)', 'count')
+    .groupBy('team.id')
+    .addGroupBy('a.mediaType')
+    .getRawMany();
 
-    for (const row of raw) {
-      if (!row.teamId) continue;
-      const teamId = row.teamId;
-      const media = row.mediaType.toUpperCase();
-      result[teamId] ??= {};
-      result[teamId][media] = parseInt(row.count, 10);
-    }
+  const resultMap: Record<string, Record<string, number>> = {};
 
-    return result;
+  for (const row of raw) {
+    if (!row.teamId) continue;
+    const teamId = row.teamId;
+    const media = row.mediaType.toUpperCase();
+
+    resultMap[teamId] ??= {};
+    resultMap[teamId][media] = parseInt(row.count, 10);
   }
+
+  const resultArray: TeamContribution[] = Object.entries(resultMap).map(
+    ([teamId, mediaCounts]) => ({
+      teamId,
+      ...mediaCounts,
+    }),
+  );
+
+  return resultArray;
+}
+
 
   async getOverallComplianceRate(start?: Date, end?: Date): Promise<number> {
     const all = await this.generateWeeklyCompliance(start, end);
