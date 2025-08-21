@@ -160,26 +160,39 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
     return result;
   }
 
-  // Example: compliance per team
- async getCompliancePerTeam() {
-  try {
-    const result = await this.activityRepo
-      .createQueryBuilder('activity')
-      .select('activity.teamId', 'teamId')
-      .addSelect('COUNT(*)', 'totalActivities')
-      .addSelect(
-        'SUM(CASE WHEN activity.compliant = true THEN 1 ELSE 0 END)',
-        'compliantActivities',
-      )
-      .groupBy('activity.teamId')
-      .getRawMany();
+  
+async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]> {
+  const teams = await this.teamRepo.find({ relations: ['users'] });
+  const results: { team: string; complianceRate: number }[] = [];
 
-    return result;
-  } catch (error) {
-    console.error('Error in getCompliancePerTeam:', error);
-    throw new InternalServerErrorException('Failed to get compliance per team');
+  for (const team of teams) {
+    const users = team.members || [];
+    if (!users.length) continue;
+
+    let compliantCount = 0;
+
+    for (const user of users) {
+      const activities = await this.activityRepo.find({
+        where: { user: { id: user.id } },
+      });
+
+      const hasStory = activities.some((a) => a.mediaType === 'story');
+      const hasPost = activities.some((a) => a.mediaType === 'post');
+      const hasReel = activities.some((a) => a.mediaType === 'reel');
+
+      if (hasStory && hasPost && hasReel) {
+        compliantCount++;
+      }
+    }
+
+    const complianceRate = (compliantCount / users.length) * 100;
+    results.push({ team: team.name, complianceRate });
   }
+
+  return results;
 }
+
+
 
   async getTeamContributionPie(): Promise<TeamContribution[]> {
   const raw = await this.activityRepo
