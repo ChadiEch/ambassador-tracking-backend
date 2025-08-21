@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { InternalServerErrorException } from '@nestjs/common/exceptions/internal-server-error.exception';
 import { AmbassadorActivity } from '../entities/ambassador-activity.entity';
 import { User } from '../users/entities/user.entity';
 import { PostingRule } from '../posting-rules/entities/posting-rule.entity';
@@ -160,8 +161,8 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
   }
 
   // Example: compliance per team
-  async getCompliancePerTeam() {
-    // This is just an example query; adjust to your schema
+ async getCompliancePerTeam() {
+  try {
     const result = await this.activityRepo
       .createQueryBuilder('activity')
       .select('activity.teamId', 'teamId')
@@ -174,7 +175,12 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
       .getRawMany();
 
     return result;
+  } catch (error) {
+    console.error('Error in getCompliancePerTeam:', error);
+    throw new InternalServerErrorException('Failed to get compliance per team');
   }
+}
+
   async getTeamContributionPie(): Promise<TeamContribution[]> {
   const raw = await this.activityRepo
     .createQueryBuilder('a')
