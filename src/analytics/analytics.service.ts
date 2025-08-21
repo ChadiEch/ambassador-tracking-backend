@@ -162,37 +162,35 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
 
   
 async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]> {
-  const teams = await this.teamRepo.find({ relations: ['users'] });
+  const teams = await this.teamRepo.find({ relations: ['members'] }); // 'members', not 'users'
   const results: { team: string; complianceRate: number }[] = [];
 
   for (const team of teams) {
-    const users = team.members || [];
-    if (!users.length) continue;
+    let compliantUsers = 0;
 
-    let compliantCount = 0;
-
-    for (const user of users) {
+    for (const user of team.members) {
       const activities = await this.activityRepo.find({
         where: { user: { id: user.id } },
       });
 
-      const hasStory = activities.some((a) => a.mediaType === 'story');
-      const hasPost = activities.some((a) => a.mediaType === 'post');
-      const hasReel = activities.some((a) => a.mediaType === 'reel');
+      const hasStory = activities.some(a => a.mediaType === 'story');
+      const hasPost = activities.some(a => a.mediaType === 'post');
+      const hasReel = activities.some(a => a.mediaType === 'reel');
 
       if (hasStory && hasPost && hasReel) {
-        compliantCount++;
+        compliantUsers++;
       }
     }
 
-    const complianceRate = (compliantCount / users.length) * 100;
+    const complianceRate = team.members.length
+      ? (compliantUsers / team.members.length) * 100
+      : 0;
+
     results.push({ team: team.name, complianceRate });
   }
 
   return results;
 }
-
-
 
   async getTeamContributionPie(): Promise<TeamContribution[]> {
   const raw = await this.activityRepo
