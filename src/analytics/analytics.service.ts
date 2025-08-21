@@ -159,7 +159,22 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
     return result;
   }
 
+  // Example: compliance per team
+  async getCompliancePerTeam() {
+    // This is just an example query; adjust to your schema
+    const result = await this.activityRepo
+      .createQueryBuilder('activity')
+      .select('activity.teamId', 'teamId')
+      .addSelect('COUNT(*)', 'totalActivities')
+      .addSelect(
+        'SUM(CASE WHEN activity.compliant = true THEN 1 ELSE 0 END)',
+        'compliantActivities',
+      )
+      .groupBy('activity.teamId')
+      .getRawMany();
 
+    return result;
+  }
   async getTeamContributionPie(): Promise<TeamContribution[]> {
   const raw = await this.activityRepo
     .createQueryBuilder('a')

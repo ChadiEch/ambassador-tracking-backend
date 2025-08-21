@@ -81,6 +81,12 @@ getTeamActivity() {
     return this.analyticsService.getTeamContributionPie();
   }
 
+  @Get('compliance-by-team')
+getComplianceByTeam() {
+  return this.analyticsService.getCompliancePerTeam(); // or whatever the service function is
+}
+
+
   // ✅ 4. Admin - Count of ambassadors fully compliant
   @Get('overall-compliance-rate')
   getOverallComplianceRate(
