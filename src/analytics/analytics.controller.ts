@@ -68,6 +68,7 @@ getTeamActivity() {
 }
 
 
+
   // ✅ 2. Admin - Monthly activity per team
   @Get('team-monthly-activity')
   getTeamMonthlyActivity() {
@@ -81,7 +82,7 @@ getTeamActivity() {
   }
 
   // ✅ 4. Admin - Count of ambassadors fully compliant
-  @Get('overall-compliance-count')
+  @Get('overall-compliance-rate')
   getOverallComplianceRate(
     @Query('start') start?: string,
     @Query('end') end?: string,
