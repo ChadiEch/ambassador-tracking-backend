@@ -62,6 +62,12 @@ async getMonthlyActivity(
   return this.analyticsService.getMonthlyActivity();
 }
 
+@Get('team-activity')
+getTeamActivity() {
+  return this.analyticsService.getTeamMonthlyActivity(); 
+}
+
+
   // ✅ 2. Admin - Monthly activity per team
   @Get('team-monthly-activity')
   getTeamMonthlyActivity() {
