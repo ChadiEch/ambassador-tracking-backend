@@ -13,7 +13,7 @@ import { Team } from '../teams/entities/team.entity'; // 👈 ajoute ceci
     TypeOrmModule.forFeature([
       AmbassadorActivity,
       User,
-      PostingRule,
+      PostingRule, 
       Team, // ✅ Met ici Team dans le tableau
     ]),
   ],
