@@ -716,78 +716,99 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
   }
 
   async getUserEngagement(): Promise<UserEngagement[]> {
-    const users = await this.userRepo.find({
-      where: { role: 'ambassador' },
-      relations: ['teamMemberships', 'teamMemberships.team', 'warnings']
-    });
-    
-    const globalRule = await this.rulesRepo.findOne({ where: {} });
-    const expectedStories = globalRule?.stories_per_week ?? 3;
-    const expectedPosts = globalRule?.posts_per_week ?? 1;
-    const expectedReels = globalRule?.reels_per_week ?? 1;
-    
-    const weekStart = startOfWeek(new Date());
-    const engagement: UserEngagement[] = [];
-    
-    for (const user of users) {
-      if (!user.instagram) continue;
+    try {
+      const users = await this.userRepo.find({
+        where: { role: 'ambassador' },
+        relations: ['teamMemberships', 'teamMemberships.team', 'warnings']
+      });
       
-      const activities = await this.activityRepo
-        .createQueryBuilder('a')
-        .select('a.mediaType', 'mediaType')
-        .addSelect('COUNT(*)', 'count')
-        .where('a.userInstagramId = :instagramId', { instagramId: user.instagram })
-        .andWhere('a.timestamp >= :weekStart', { weekStart })
-        .groupBy('a.mediaType')
-        .getRawMany();
+      const globalRule = await this.rulesRepo.findOne({ where: {} });
+      const expectedStories = globalRule?.stories_per_week ?? 3;
+      const expectedPosts = globalRule?.posts_per_week ?? 1;
+      const expectedReels = globalRule?.reels_per_week ?? 1;
       
-      const lastActivity = await this.activityRepo
-        .createQueryBuilder('a')
-        .select('MAX(a.timestamp)', 'lastActivity')
-        .where('a.userInstagramId = :instagramId', { instagramId: user.instagram })
-        .getRawOne();
+      const weekStart = startOfWeek(new Date());
+      const engagement: UserEngagement[] = [];
       
-      const activityMap = { story: 0, image: 0, video: 0 };
-      activities.forEach(a => {
-        const mediaType = a.mediaType.toLowerCase();
-        if (mediaType in activityMap) {
-          activityMap[mediaType as keyof typeof activityMap] = parseInt(a.count);
+      for (const user of users) {
+        if (!user.instagram) {
+          continue;
         }
-      });
+        
+        // First try to get current week activities
+        let activities = await this.activityRepo
+          .createQueryBuilder('a')
+          .select('a.mediaType', 'mediaType')
+          .addSelect('COUNT(*)', 'count')
+          .where('a.userInstagramId = :instagramId', { instagramId: user.instagram })
+          .andWhere('a.timestamp >= :weekStart', { weekStart })
+          .groupBy('a.mediaType')
+          .getRawMany();
+        
+        // If no current week activities, get last 30 days to show some data
+        if (activities.length === 0) {
+          const last30Days = subDays(new Date(), 30);
+          activities = await this.activityRepo
+            .createQueryBuilder('a')
+            .select('a.mediaType', 'mediaType')
+            .addSelect('COUNT(*)', 'count')
+            .where('a.userInstagramId = :instagramId', { instagramId: user.instagram })
+            .andWhere('a.timestamp >= :last30Days', { last30Days })
+            .groupBy('a.mediaType')
+            .getRawMany();
+        }
+        
+        const lastActivity = await this.activityRepo
+          .createQueryBuilder('a')
+          .select('MAX(a.timestamp)', 'lastActivity')
+          .where('a.userInstagramId = :instagramId', { instagramId: user.instagram })
+          .getRawOne();
+        
+        const activityMap = { story: 0, image: 0, video: 0 };
+        activities.forEach(a => {
+          const mediaType = a.mediaType.toLowerCase();
+          if (mediaType in activityMap) {
+            activityMap[mediaType as keyof typeof activityMap] = parseInt(a.count);
+          }
+        });
+        
+        const stories = activityMap.story;
+        const posts = activityMap.image;
+        const reels = activityMap.video;
+        const totalActivity = stories + posts + reels;
+        
+        // Calculate more accurate compliance score (0-100)
+        // Each category contributes equally to the score
+        const storyCompliance = Math.min((stories / expectedStories) * 100, 100);
+        const postCompliance = Math.min((posts / expectedPosts) * 100, 100);
+        const reelCompliance = Math.min((reels / expectedReels) * 100, 100);
+        
+        // Average of all three categories, rounded to 2 decimal places
+        const complianceScore = Math.round(((storyCompliance + postCompliance + reelCompliance) / 3) * 100) / 100;
+        
+        const teamName = user.teamMemberships?.[0]?.team?.name;
+        const warningCount = user.warnings?.filter(w => w.active)?.length || 0;
+        
+        engagement.push({
+          userId: user.id,
+          userName: user.name,
+          teamName,
+          totalActivity,
+          stories,
+          posts,
+          reels,
+          complianceScore,
+          lastActivity: lastActivity?.lastActivity,
+          warningCount,
+          isActive: user.active
+        });
+      }
       
-      const stories = activityMap.story;
-      const posts = activityMap.image;
-      const reels = activityMap.video;
-      const totalActivity = stories + posts + reels;
-      
-      // Calculate more accurate compliance score (0-100)
-      // Each category contributes equally to the score
-      const storyCompliance = Math.min((stories / expectedStories) * 100, 100);
-      const postCompliance = Math.min((posts / expectedPosts) * 100, 100);
-      const reelCompliance = Math.min((reels / expectedReels) * 100, 100);
-      
-      // Average of all three categories, rounded to 2 decimal places
-      const complianceScore = Math.round(((storyCompliance + postCompliance + reelCompliance) / 3) * 100) / 100;
-      
-      const teamName = user.teamMemberships?.[0]?.team?.name;
-      const warningCount = user.warnings?.filter(w => w.active)?.length || 0;
-      
-      engagement.push({
-        userId: user.id,
-        userName: user.name,
-        teamName,
-        totalActivity,
-        stories,
-        posts,
-        reels,
-        complianceScore,
-        lastActivity: lastActivity?.lastActivity,
-        warningCount,
-        isActive: user.active
-      });
+      return engagement.sort((a, b) => b.complianceScore - a.complianceScore);
+    } catch (error) {
+      console.error('Error in getUserEngagement:', error);
+      return [];
     }
-    
-    return engagement.sort((a, b) => b.complianceScore - a.complianceScore);
   }
 
   async getComplianceTrends(months: number = 6): Promise<ComplianceTrend[]> {
@@ -886,14 +907,38 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
   }
 
   async getTopPerformers(limit: number = 10): Promise<TopPerformers[]> {
-    const engagement = await this.getUserEngagement();
-    return engagement.slice(0, limit).map(e => ({
-      userId: e.userId,
-      userName: e.userName,
-      teamName: e.teamName,
-      totalActivity: e.totalActivity,
-      complianceScore: e.complianceScore
-    }));
+    try {
+      const engagement = await this.getUserEngagement();
+      
+      if (!engagement || engagement.length === 0) {
+        return [];
+      }
+      
+      // Filter out users with no activity and sort by compliance score
+      const activePerformers = engagement
+        .filter(e => e.totalActivity > 0 || e.complianceScore > 0)
+        .sort((a, b) => {
+          // Sort by compliance score first, then by total activity
+          if (b.complianceScore === a.complianceScore) {
+            return b.totalActivity - a.totalActivity;
+          }
+          return b.complianceScore - a.complianceScore;
+        })
+        .slice(0, limit);
+      
+      const result = activePerformers.map(e => ({
+        userId: e.userId,
+        userName: e.userName,
+        teamName: e.teamName,
+        totalActivity: e.totalActivity,
+        complianceScore: e.complianceScore
+      }));
+      
+      return result;
+    } catch (error) {
+      console.error('Error in getTopPerformers:', error);
+      return [];
+    }
   }
 
   async getInactiveUsers(daysSinceLastActivity: number = 7): Promise<InactiveUsers[]> {
