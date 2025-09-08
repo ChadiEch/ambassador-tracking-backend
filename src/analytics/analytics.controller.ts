@@ -20,26 +20,49 @@ export class AnalyticsController {
   // ===== NEW COMPREHENSIVE ANALYTICS ENDPOINTS =====
 
   @Get('dashboard-stats')
-  async getDashboardStats(): Promise<DashboardStats> {
-    return this.analyticsService.getDashboardStats();
+  async getDashboardStats(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ): Promise<DashboardStats> {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.analyticsService.getDashboardStats(start, end);
   }
 
   @Get('activity-trends')
   async getActivityTrends(
     @Query('days') days?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ): Promise<ActivityTrend[]> {
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      return this.analyticsService.getActivityTrends(daysDiff, start, end);
+    }
     const daysNumber = days ? parseInt(days) : 30;
     return this.analyticsService.getActivityTrends(daysNumber);
   }
 
   @Get('team-performance')
-  async getTeamPerformance(): Promise<TeamPerformance[]> {
-    return this.analyticsService.getTeamPerformance();
+  async getTeamPerformance(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ): Promise<TeamPerformance[]> {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.analyticsService.getTeamPerformance(start, end);
   }
 
   @Get('user-engagement')
-  async getUserEngagement(): Promise<UserEngagement[]> {
-    return this.analyticsService.getUserEngagement();
+  async getUserEngagement(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ): Promise<UserEngagement[]> {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.analyticsService.getUserEngagement(start, end);
   }
 
   @Get('compliance-trends')
@@ -58,9 +81,13 @@ export class AnalyticsController {
   @Get('top-performers')
   async getTopPerformers(
     @Query('limit') limit?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ): Promise<TopPerformers[]> {
     const limitNumber = limit ? parseInt(limit) : 10;
-    return this.analyticsService.getTopPerformers(limitNumber);
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.analyticsService.getTopPerformers(limitNumber, start, end);
   }
 
   @Get('inactive-users')
