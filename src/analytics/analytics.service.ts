@@ -509,8 +509,53 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
     
     const activeWarnings = await this.warningRepo.count({ where: { active: true } });
     
-    const compliantUsers = await this.getOverallComplianceRate();
-    const overallComplianceRate = totalAmbassadors > 0 ? (compliantUsers / totalAmbassadors) * 100 : 0;
+    // Calculate accurate compliance rate
+    const globalRule = await this.rulesRepo.findOne({ where: {} });
+    const expectedStories = globalRule?.stories_per_week ?? 3;
+    const expectedPosts = globalRule?.posts_per_week ?? 1;
+    const expectedReels = globalRule?.reels_per_week ?? 1;
+    
+    const ambassadors = await this.userRepo.find({
+      where: { role: 'ambassador', active: true }
+    });
+    
+    let compliantCount = 0;
+    
+    for (const ambassador of ambassadors) {
+      if (!ambassador.instagram) continue;
+      
+      const weeklyActivities = await this.activityRepo
+        .createQueryBuilder('a')
+        .select('a.mediaType', 'mediaType')
+        .addSelect('COUNT(*)', 'count')
+        .where('a.userInstagramId = :instagramId', { instagramId: ambassador.instagram })
+        .andWhere('a.timestamp >= :weekStart', { weekStart })
+        .groupBy('a.mediaType')
+        .getRawMany();
+      
+      const activityCounts = {
+        story: 0,
+        image: 0,
+        video: 0
+      };
+      
+      weeklyActivities.forEach(activity => {
+        const mediaType = activity.mediaType.toLowerCase();
+        if (mediaType in activityCounts) {
+          activityCounts[mediaType as keyof typeof activityCounts] = parseInt(activity.count);
+        }
+      });
+      
+      // User is compliant if they meet ALL weekly requirements
+      if (activityCounts.story >= expectedStories &&
+          activityCounts.image >= expectedPosts &&
+          activityCounts.video >= expectedReels) {
+        compliantCount++;
+      }
+    }
+    
+    const overallComplianceRate = ambassadors.length > 0 ? 
+      Math.round((compliantCount / ambassadors.length) * 100 * 100) / 100 : 0;
     
     return {
       totalAmbassadors,
@@ -585,8 +630,8 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
     const performance: TeamPerformance[] = [];
     
     for (const team of teams) {
-      const memberIds = team.members.map(m => m.user.id);
-      const instagramIds = team.members.map(m => m.user.instagram).filter(Boolean);
+      const memberUsers = team.members.map(m => m.user).filter(u => u && u.active);
+      const instagramIds = memberUsers.map(u => u.instagram).filter(Boolean);
       
       let totalActivity = 0;
       let stories = 0;
@@ -595,7 +640,8 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
       let compliantMembers = 0;
       
       if (instagramIds.length > 0) {
-        const activities = await this.activityRepo
+        // Get team-wide activity for this week
+        const teamActivities = await this.activityRepo
           .createQueryBuilder('a')
           .select('a.mediaType', 'mediaType')
           .addSelect('COUNT(*)', 'count')
@@ -604,33 +650,41 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
           .groupBy('a.mediaType')
           .getRawMany();
         
-        const activityMap = { story: 0, image: 0, video: 0 };
-        activities.forEach(a => {
-          const count = parseInt(a.count);
-          activityMap[a.mediaType.toLowerCase() as keyof typeof activityMap] = count;
+        const teamActivityMap = { story: 0, image: 0, video: 0 };
+        teamActivities.forEach(a => {
+          const mediaType = a.mediaType.toLowerCase();
+          if (mediaType in teamActivityMap) {
+            teamActivityMap[mediaType as keyof typeof teamActivityMap] = parseInt(a.count);
+          }
         });
         
-        stories = activityMap.story;
-        posts = activityMap.image;
-        reels = activityMap.video;
+        stories = teamActivityMap.story;
+        posts = teamActivityMap.image;
+        reels = teamActivityMap.video;
         totalActivity = stories + posts + reels;
         
-        // Calculate compliance for each member
-        for (const member of team.members) {
+        // Calculate individual compliance for accurate team compliance rate
+        for (const user of memberUsers) {
+          if (!user.instagram) continue;
+          
           const memberActivities = await this.activityRepo
             .createQueryBuilder('a')
             .select('a.mediaType', 'mediaType')
             .addSelect('COUNT(*)', 'count')
-            .where('a.userInstagramId = :instagramId', { instagramId: member.user.instagram })
+            .where('a.userInstagramId = :instagramId', { instagramId: user.instagram })
             .andWhere('a.timestamp >= :weekStart', { weekStart })
             .groupBy('a.mediaType')
             .getRawMany();
           
           const memberActivityMap = { story: 0, image: 0, video: 0 };
           memberActivities.forEach(a => {
-            memberActivityMap[a.mediaType.toLowerCase() as keyof typeof memberActivityMap] = parseInt(a.count);
+            const mediaType = a.mediaType.toLowerCase();
+            if (mediaType in memberActivityMap) {
+              memberActivityMap[mediaType as keyof typeof memberActivityMap] = parseInt(a.count);
+            }
           });
           
+          // Member is compliant if they meet ALL weekly requirements
           const isCompliant = memberActivityMap.story >= expectedStories &&
                              memberActivityMap.image >= expectedPosts &&
                              memberActivityMap.video >= expectedReels;
@@ -639,9 +693,11 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
         }
       }
       
-      const memberCount = team.members.length;
-      const complianceRate = memberCount > 0 ? (compliantMembers / memberCount) * 100 : 0;
-      const avgActivityPerMember = memberCount > 0 ? totalActivity / memberCount : 0;
+      const memberCount = memberUsers.length;
+      const complianceRate = memberCount > 0 ? 
+        Math.round((compliantMembers / memberCount) * 100 * 100) / 100 : 0;
+      const avgActivityPerMember = memberCount > 0 ? 
+        Math.round((totalActivity / memberCount) * 100) / 100 : 0;
       
       performance.push({
         teamId: team.id,
@@ -674,6 +730,8 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
     const engagement: UserEngagement[] = [];
     
     for (const user of users) {
+      if (!user.instagram) continue;
+      
       const activities = await this.activityRepo
         .createQueryBuilder('a')
         .select('a.mediaType', 'mediaType')
@@ -691,7 +749,10 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
       
       const activityMap = { story: 0, image: 0, video: 0 };
       activities.forEach(a => {
-        activityMap[a.mediaType.toLowerCase() as keyof typeof activityMap] = parseInt(a.count);
+        const mediaType = a.mediaType.toLowerCase();
+        if (mediaType in activityMap) {
+          activityMap[mediaType as keyof typeof activityMap] = parseInt(a.count);
+        }
       });
       
       const stories = activityMap.story;
@@ -699,11 +760,14 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
       const reels = activityMap.video;
       const totalActivity = stories + posts + reels;
       
-      // Calculate compliance score (0-100)
-      const storyCompliance = Math.min(stories / expectedStories, 1);
-      const postCompliance = Math.min(posts / expectedPosts, 1);
-      const reelCompliance = Math.min(reels / expectedReels, 1);
-      const complianceScore = ((storyCompliance + postCompliance + reelCompliance) / 3) * 100;
+      // Calculate more accurate compliance score (0-100)
+      // Each category contributes equally to the score
+      const storyCompliance = Math.min((stories / expectedStories) * 100, 100);
+      const postCompliance = Math.min((posts / expectedPosts) * 100, 100);
+      const reelCompliance = Math.min((reels / expectedReels) * 100, 100);
+      
+      // Average of all three categories, rounded to 2 decimal places
+      const complianceScore = Math.round(((storyCompliance + postCompliance + reelCompliance) / 3) * 100) / 100;
       
       const teamName = user.teamMemberships?.[0]?.team?.name;
       const warningCount = user.warnings?.filter(w => w.active)?.length || 0;
@@ -738,10 +802,14 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
       const monthStart = startOfMonth(date);
       const monthEnd = endOfMonth(date);
       
-      const users = await this.userRepo.find({ where: { role: 'ambassador' } });
+      const users = await this.userRepo.find({ 
+        where: { role: 'ambassador', active: true } 
+      });
       let compliantUsers = 0;
       
       for (const user of users) {
+        if (!user.instagram) continue;
+        
         const activities = await this.activityRepo
           .createQueryBuilder('a')
           .select('a.mediaType', 'mediaType')
@@ -754,20 +822,29 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
         
         const activityMap = { story: 0, image: 0, video: 0 };
         activities.forEach(a => {
-          activityMap[a.mediaType.toLowerCase() as keyof typeof activityMap] = parseInt(a.count);
+          const mediaType = a.mediaType.toLowerCase();
+          if (mediaType in activityMap) {
+            activityMap[mediaType as keyof typeof activityMap] = parseInt(a.count);
+          }
         });
         
-        // Adjust for weekly requirements in monthly data
-        const weeksInMonth = 4;
-        const isCompliant = activityMap.story >= (expectedStories * weeksInMonth) &&
-                           activityMap.image >= (expectedPosts * weeksInMonth) &&
-                           activityMap.video >= (expectedReels * weeksInMonth);
+        // Calculate expected monthly requirements
+        // Get the actual number of weeks in the month for more accurate calculation
+        const monthDuration = Math.ceil((monthEnd.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24 * 7));
+        const expectedMonthlyStories = expectedStories * monthDuration;
+        const expectedMonthlyPosts = expectedPosts * monthDuration;
+        const expectedMonthlyReels = expectedReels * monthDuration;
+        
+        const isCompliant = activityMap.story >= expectedMonthlyStories &&
+                           activityMap.image >= expectedMonthlyPosts &&
+                           activityMap.video >= expectedMonthlyReels;
         
         if (isCompliant) compliantUsers++;
       }
       
       const totalUsers = users.length;
-      const complianceRate = totalUsers > 0 ? (compliantUsers / totalUsers) * 100 : 0;
+      const complianceRate = totalUsers > 0 ? 
+        Math.round((compliantUsers / totalUsers) * 100 * 100) / 100 : 0;
       
       trends.unshift({
         period: format(date, 'yyyy-MM'),
@@ -792,12 +869,20 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
     
     return activities.map(a => {
       const count = parseInt(a.count);
+      const percentage = total > 0 ? Math.round((count / total) * 100 * 100) / 100 : 0;
+      
+      // Normalize media type names for better display
+      let mediaType = a.mediaType;
+      if (mediaType.toLowerCase() === 'image') mediaType = 'Posts';
+      else if (mediaType.toLowerCase() === 'video') mediaType = 'Reels';
+      else if (mediaType.toLowerCase() === 'story') mediaType = 'Stories';
+      
       return {
-        mediaType: a.mediaType,
+        mediaType,
         count,
-        percentage: total > 0 ? (count / total) * 100 : 0
+        percentage
       };
-    });
+    }).sort((a, b) => b.count - a.count); // Sort by count descending
   }
 
   async getTopPerformers(limit: number = 10): Promise<TopPerformers[]> {
@@ -822,6 +907,8 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
     const inactiveUsers: InactiveUsers[] = [];
     
     for (const user of users) {
+      if (!user.instagram) continue;
+      
       const lastActivity = await this.activityRepo
         .createQueryBuilder('a')
         .select('MAX(a.timestamp)', 'lastActivity')
@@ -829,11 +916,14 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
         .getRawOne();
       
       const lastActivityDate = lastActivity?.lastActivity;
+      
+      // Calculate exact days since last activity
       const daysSince = lastActivityDate ? 
         Math.floor((new Date().getTime() - new Date(lastActivityDate).getTime()) / (1000 * 60 * 60 * 24)) : 
-        999;
+        Infinity;
       
-      if (!lastActivityDate || new Date(lastActivityDate) < cutoffDate) {
+      // Only include users who haven't been active within the specified timeframe
+      if (daysSince >= daysSinceLastActivity) {
         const teamName = user.teamMemberships?.[0]?.team?.name;
         const warningCount = user.warnings?.filter(w => w.active)?.length || 0;
         
@@ -842,7 +932,7 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
           userName: user.name,
           teamName,
           lastActivity: lastActivityDate,
-          daysSinceLastActivity: daysSince,
+          daysSinceLastActivity: Math.min(daysSince, 999), // Cap at 999 for display
           warningCount
         });
       }
