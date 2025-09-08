@@ -2,10 +2,76 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { AmbassadorSummary } from './dto/ambassador-summary.dto';
 import { AmbassadorComplianceData } from './dto/ambassador-compliance.dto';
+import type { 
+  DashboardStats, 
+  ActivityTrend, 
+  TeamPerformance, 
+  UserEngagement, 
+  ComplianceTrend, 
+  ActivityDistribution, 
+  TopPerformers, 
+  InactiveUsers 
+} from './analytics.service';
 
 @Controller('analytics')
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
+
+  // ===== NEW COMPREHENSIVE ANALYTICS ENDPOINTS =====
+
+  @Get('dashboard-stats')
+  async getDashboardStats(): Promise<DashboardStats> {
+    return this.analyticsService.getDashboardStats();
+  }
+
+  @Get('activity-trends')
+  async getActivityTrends(
+    @Query('days') days?: string,
+  ): Promise<ActivityTrend[]> {
+    const daysNumber = days ? parseInt(days) : 30;
+    return this.analyticsService.getActivityTrends(daysNumber);
+  }
+
+  @Get('team-performance')
+  async getTeamPerformance(): Promise<TeamPerformance[]> {
+    return this.analyticsService.getTeamPerformance();
+  }
+
+  @Get('user-engagement')
+  async getUserEngagement(): Promise<UserEngagement[]> {
+    return this.analyticsService.getUserEngagement();
+  }
+
+  @Get('compliance-trends')
+  async getComplianceTrends(
+    @Query('months') months?: string,
+  ): Promise<ComplianceTrend[]> {
+    const monthsNumber = months ? parseInt(months) : 6;
+    return this.analyticsService.getComplianceTrends(monthsNumber);
+  }
+
+  @Get('activity-distribution')
+  async getActivityDistribution(): Promise<ActivityDistribution[]> {
+    return this.analyticsService.getActivityDistribution();
+  }
+
+  @Get('top-performers')
+  async getTopPerformers(
+    @Query('limit') limit?: string,
+  ): Promise<TopPerformers[]> {
+    const limitNumber = limit ? parseInt(limit) : 10;
+    return this.analyticsService.getTopPerformers(limitNumber);
+  }
+
+  @Get('inactive-users')
+  async getInactiveUsers(
+    @Query('days') days?: string,
+  ): Promise<InactiveUsers[]> {
+    const daysNumber = days ? parseInt(days) : 7;
+    return this.analyticsService.getInactiveUsers(daysNumber);
+  }
+
+  // ===== EXISTING ENDPOINTS (ENHANCED) =====
 
   @Get('all-compliance')
   async getAllCompliance(

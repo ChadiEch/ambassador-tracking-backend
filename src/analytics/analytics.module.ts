@@ -6,7 +6,8 @@ import { AnalyticsController } from './analytics.controller';
 import { AmbassadorActivity } from '../entities/ambassador-activity.entity';
 import { User } from '../users/entities/user.entity';
 import { PostingRule } from '../posting-rules/entities/posting-rule.entity';
-import { Team } from '../teams/entities/team.entity'; // 👈 ajoute ceci
+import { Team } from '../teams/entities/team.entity';
+import { Warning } from '../warnings/entities/warning.entity';
 
 @Module({
   imports: [
@@ -14,7 +15,8 @@ import { Team } from '../teams/entities/team.entity'; // 👈 ajoute ceci
       AmbassadorActivity,
       User,
       PostingRule, 
-      Team, // ✅ Met ici Team dans le tableau
+      Team,
+      Warning,
     ]),
   ],
   controllers: [AnalyticsController],
