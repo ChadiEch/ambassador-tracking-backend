@@ -15,7 +15,7 @@ type TeamContribution = {
   teamId: string;
   [mediaType: string]: number | string;
 };
-
+ 
 export interface DashboardStats {
   totalAmbassadors: number;
   activeAmbassadors: number;
