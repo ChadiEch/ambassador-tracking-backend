@@ -14,7 +14,7 @@ export class TeamMembersService {
 
   findOne(id: number) {
     return `This action returns a #${id} teamMember`;
-  }
+  } 
 
   update(id: number, updateTeamMemberDto: UpdateTeamMemberDto) {
     return `This action updates a #${id} teamMember`;
