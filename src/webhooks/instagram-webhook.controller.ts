@@ -76,39 +76,97 @@ async handleWebhook(@Body() body: any) {
 
   if (body?.entry) {
     for (const entry of body.entry) {
+      console.log('Processing entry:', JSON.stringify(entry, null, 2));
+      
       const changes = entry.changes || [];
       for (const change of changes) {
+        console.log('Processing change:', JSON.stringify(change, null, 2));
+        
         if (change.field === 'mentions') {
           const mediaId = change.value.media_id;
           const fromUsername = change.value.from?.username;
           const brandMentionedId = change.value.mentioned_user_id;
 
+          console.log('Processing mention from:', fromUsername, 'mediaId:', mediaId);
+          
           try {
             const media = await this.fetchMediaDetails(mediaId);
+            
+            console.log('Media details:', JSON.stringify(media, null, 2));
 
             // Optional: Check for duplicate media
             const alreadyExists = await this.activityRepo.findOne({
-              // where: { mediaId },
+              where: { permalink: media.permalink },
             });
-            if (alreadyExists) continue; // Skip duplicate
+            if (alreadyExists) {
+              console.log('Skipping duplicate mention:', media.permalink);
+              continue; // Skip duplicate
+            }
 
             const user = await this.userRepo.findOne({
               where: { instagram: fromUsername },
             });
+            
+            console.log('Found user for mention:', user?.id);
 
             const activity = new AmbassadorActivity();
-            // activity.mediaId = media.id;
-            activity.mediaType = media.media_type;
+            activity.mediaType = this.normalizeMediaType(media.media_type);
             activity.permalink = media.permalink;
             activity.timestamp = new Date(media.timestamp);
             activity.userInstagramId = fromUsername;
             if (user) activity.user = user;
 
             await this.activityRepo.save(activity);
+            console.log('✅ Mention saved for user:', fromUsername);
 
           } catch (err: any) {
-            console.error('❌ Error:', err.message);
+            console.error('❌ Error processing mention:', err.message);
           }
+        }
+        // Handle tags in posts and reels
+        else if (change.field === 'tags') {
+          const mediaId = change.value.media_id;
+          // For tags, the user who is tagged is in the 'username' field
+          const taggedUsername = change.value.username;
+
+          console.log('Processing tag for:', taggedUsername, 'mediaId:', mediaId);
+          
+          try {
+            const media = await this.fetchMediaDetails(mediaId);
+            
+            console.log('Media details for tag:', JSON.stringify(media, null, 2));
+
+            // Check for duplicate media
+            const alreadyExists = await this.activityRepo.findOne({
+              where: { permalink: media.permalink },
+            });
+            if (alreadyExists) {
+              console.log('Skipping duplicate tag:', media.permalink);
+              continue; // Skip duplicate
+            }
+
+            // Find user by their Instagram username (the tagged user)
+            const user = await this.userRepo.findOne({
+              where: { instagram: taggedUsername },
+            });
+            
+            console.log('Found user for tag:', user?.id);
+
+            const activity = new AmbassadorActivity();
+            activity.mediaType = this.normalizeMediaType(media.media_type);
+            activity.permalink = media.permalink;
+            activity.timestamp = new Date(media.timestamp);
+            activity.userInstagramId = taggedUsername;
+            if (user) activity.user = user;
+
+            await this.activityRepo.save(activity);
+            console.log('✅ Tag saved for user:', taggedUsername);
+
+          } catch (err: any) {
+            console.error('❌ Error processing tag:', err.message);
+          }
+        } else {
+          console.log('Unknown field type:', change.field);
         }
       }
     }
@@ -130,5 +188,19 @@ async handleWebhook(@Body() body: any) {
     );
 
     return response.data;
+  }
+
+  // Helper function to normalize media type
+  private normalizeMediaType(mediaType: string): string {
+    switch (mediaType.toLowerCase()) {
+      case 'image':
+        return 'post';
+      case 'video':
+        return 'reel';
+      case 'carousel':
+        return 'post'; // Carousel is typically considered a post
+      default:
+        return mediaType.toLowerCase();
+    }
   }
 }
