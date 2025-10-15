@@ -59,6 +59,22 @@ export class InstagramWebhookController {
   async manuallyCheckTags() {
     console.log('Manual tag check endpoint called');
     try {
+      // First validate configuration
+      const configValidation = this.taggedMediaService.validateConfiguration();
+      console.log('Configuration validation result:', configValidation);
+      
+      if (!configValidation.valid) {
+        return {
+          success: false,
+          message: 'Instagram configuration is invalid',
+          errors: configValidation.errors,
+          config: {
+            instagramBusinessAccountId: configValidation.instagramBusinessAccountId,
+            pageAccessToken: configValidation.pageAccessToken
+          }
+        };
+      }
+      
       const result = await this.taggedMediaService.manuallyCheckForTaggedMedia();
       console.log('Tag check result:', result);
       return {

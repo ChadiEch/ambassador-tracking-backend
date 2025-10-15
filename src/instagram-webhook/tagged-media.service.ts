@@ -52,6 +52,14 @@ export class TaggedMediaService {
     this.logger.log('Configuration sources:');
     this.logger.log('- PAGE_ACCESS_TOKEN from configService:', !!this.configService.get<string>('PAGE_ACCESS_TOKEN'));
     this.logger.log('- INSTAGRAM_IG_ID from configService:', !!this.configService.get<string>('INSTAGRAM_IG_ID'));
+    
+    // Log actual values for debugging (masked for security)
+    if (this.PAGE_ACCESS_TOKEN) {
+      this.logger.log(`Actual PAGE_ACCESS_TOKEN (first 10 chars): ${this.PAGE_ACCESS_TOKEN.substring(0, Math.min(10, this.PAGE_ACCESS_TOKEN.length))}...`);
+    }
+    if (this.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
+      this.logger.log(`Actual INSTAGRAM_BUSINESS_ACCOUNT_ID: ${this.INSTAGRAM_BUSINESS_ACCOUNT_ID}`);
+    }
   }
 
   // Public method to validate configuration
@@ -441,6 +449,13 @@ export class TaggedMediaService {
           method: error.config.method,
           params: error.config.params
         }));
+        
+        // Log the full URL that was being requested
+        if (error.config.url && error.config.params) {
+          const fullUrl = `${error.config.url}?${Object.keys(error.config.params).map(key => 
+            `${key}=${encodeURIComponent(error.config.params[key])}`).join('&')}`;
+          this.logger.error('Full request URL:', fullUrl);
+        }
       }
       
       return {
