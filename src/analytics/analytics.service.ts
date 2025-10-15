@@ -110,12 +110,16 @@ export class AnalyticsService {
   ) {}
 
 async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<AmbassadorSummary[]> {
-  const now = new Date();
-  const defaultStart = new Date(now);
+  const now = endDate || new Date();
+  const defaultStart = startDate || new Date(now);
   defaultStart.setDate(now.getDate() - now.getDay());
 
   const from = startDate || defaultStart;
   const to = endDate || now;
+
+  // Calculate the dynamic factor based on date range
+  const daysDiff = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
+  const weeksFactor = Math.max(daysDiff / 7, 1);
 
   // Optimized query with JOINs to avoid N+1 problem
   const users = await this.userRepo
@@ -125,6 +129,11 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
     .getMany();
 
   const globalRule = await this.rulesRepo.findOne({ where: {} });
+  
+  // Calculate dynamic expected values based on the date range
+  const expectedStories = (globalRule?.stories_per_week ?? 3) * weeksFactor;
+  const expectedPosts = (globalRule?.posts_per_week ?? 1) * weeksFactor;
+  const expectedReels = (globalRule?.reels_per_week ?? 1) * weeksFactor;
   
   // Batch fetch all activities for the period
   const allActivities = await this.activityRepo
@@ -173,14 +182,14 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
           reels: countMap.VIDEO,
         },
         expected: {
-          stories: globalRule?.stories_per_week ?? 3,
-          posts: globalRule?.posts_per_week ?? 1,
-          reels: globalRule?.reels_per_week ?? 1,
+          stories: expectedStories,
+          posts: expectedPosts,
+          reels: expectedReels,
         },
         compliance: {
-          story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
-          post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
-          reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
+          story: countMap.STORY >= expectedStories ? 'green' : 'red',
+          post: countMap.IMAGE >= expectedPosts ? 'green' : 'red',
+          reel: countMap.VIDEO >= expectedReels ? 'green' : 'red',
         },
         lastActivity: lastActivity?.timestamp || undefined, // Use undefined instead of null
       });
@@ -386,9 +395,13 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
   }
 
   async getTeamCompliance(leaderId: string, startDate?: Date, endDate?: Date): Promise<AmbassadorSummary[]> {
-    const now = new Date();
+    const now = endDate || new Date();
     const from = startDate || new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
     const to = endDate || now;
+
+    // Calculate the dynamic factor based on date range
+    const daysDiff = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
+    const weeksFactor = Math.max(daysDiff / 7, 1);
 
     const team = await this.teamRepo
       .createQueryBuilder('team')
@@ -400,6 +413,12 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
     if (!team) return [];
 
     const globalRule = await this.rulesRepo.findOne({ where: {} });
+  
+    // Calculate dynamic expected values based on the date range
+    const expectedStories = (globalRule?.stories_per_week ?? 3) * weeksFactor;
+    const expectedPosts = (globalRule?.posts_per_week ?? 1) * weeksFactor;
+    const expectedReels = (globalRule?.reels_per_week ?? 1) * weeksFactor;
+  
     const results: AmbassadorSummary[] = [];
 
     for (const member of team.members) {
@@ -443,14 +462,14 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
           reels: countMap.VIDEO,
         },
         expected: {
-          stories: globalRule?.stories_per_week ?? 3,
-          posts: globalRule?.posts_per_week ?? 1,
-          reels: globalRule?.reels_per_week ?? 1,
+          stories: expectedStories,
+          posts: expectedPosts,
+          reels: expectedReels,
         },
         compliance: {
-          story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
-          post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
-          reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
+          story: countMap.STORY >= expectedStories ? 'green' : 'red',
+          post: countMap.IMAGE >= expectedPosts ? 'green' : 'red',
+          reel: countMap.VIDEO >= expectedReels ? 'green' : 'red',
         },
         lastActivity: lastActivity?.timestamp || null, // Add lastActivity field
       });
