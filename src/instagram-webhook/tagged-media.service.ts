@@ -74,6 +74,16 @@ export class TaggedMediaService {
       errors.push('Page Access Token (PAGE_ACCESS_TOKEN) is not configured');
     }
     
+    // Add validation for the format of the Instagram Business Account ID
+    if (this.INSTAGRAM_BUSINESS_ACCOUNT_ID && !/^\d+$/.test(this.INSTAGRAM_BUSINESS_ACCOUNT_ID)) {
+      errors.push('Instagram Business Account ID must be a numeric value');
+    }
+    
+    // Add validation for the format of the Page Access Token
+    if (this.PAGE_ACCESS_TOKEN && this.PAGE_ACCESS_TOKEN.length < 50) {
+      errors.push('Page Access Token appears to be too short to be valid');
+    }
+    
     return {
       valid: errors.length === 0,
       errors,
@@ -117,6 +127,21 @@ export class TaggedMediaService {
       };
     }
 
+    // Validate format of credentials
+    if (!/^\d+$/.test(this.INSTAGRAM_BUSINESS_ACCOUNT_ID)) {
+      return {
+        success: false,
+        message: 'Invalid Instagram Business Account ID format. It should contain only numbers.'
+      };
+    }
+
+    if (this.PAGE_ACCESS_TOKEN.length < 50) {
+      return {
+        success: false,
+        message: 'Invalid Page Access Token format. It appears to be too short.'
+      };
+    }
+
     try {
       // Test if the access token is valid by fetching the Instagram account info
       const accountInfoUrl = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/me`;
@@ -150,8 +175,7 @@ export class TaggedMediaService {
       if (!instagramAccountId) {
         return {
           success: false,
-          message: 'Instagram Business Account ID not found',
-          accountInfo: accountResponse.data
+          message: 'Instagram Business Account ID not found. Please check that your Instagram account is properly connected to your Facebook Page.'
         };
       }
 
@@ -189,9 +213,27 @@ export class TaggedMediaService {
         this.logger.error('Response data:', this.safeStringify(error.response.data));
       }
       
+      // Provide specific error messages based on the error response
+      let errorMessage = 'Error testing Instagram credentials';
+      if (error.response && error.response.data && error.response.data.error) {
+        const instagramError = error.response.data.error;
+        errorMessage = `Instagram API Error: ${instagramError.message || 'Unknown error'}`;
+        
+        // Provide specific guidance based on error code
+        if (instagramError.code === 100) {
+          if (instagramError.error_subcode === 33) {
+            errorMessage += ' - The Instagram Business Account ID may be incorrect, the account may not exist, or you may not have proper permissions. Please verify your INSTAGRAM_IG_ID value.';
+          } else {
+            errorMessage += ' - This is a bad request error. Check your Instagram Business Account ID and access token.';
+          }
+        } else if (instagramError.code === 190) {
+          errorMessage += ' - Invalid access token. Please check your PAGE_ACCESS_TOKEN value.';
+        }
+      }
+      
       return {
         success: false,
-        message: 'Error testing Instagram credentials',
+        message: errorMessage,
         errorName: error.name,
         errorMessage: error.message,
         errorCode: error.code,
@@ -211,6 +253,21 @@ export class TaggedMediaService {
         message: 'Missing Instagram credentials',
         pageAccessTokenSet: !!this.PAGE_ACCESS_TOKEN,
         instagramBusinessAccountIdSet: !!this.INSTAGRAM_BUSINESS_ACCOUNT_ID
+      };
+    }
+
+    // Validate format of credentials
+    if (!/^\d+$/.test(this.INSTAGRAM_BUSINESS_ACCOUNT_ID)) {
+      return {
+        success: false,
+        message: 'Invalid Instagram Business Account ID format. It should contain only numbers.'
+      };
+    }
+
+    if (this.PAGE_ACCESS_TOKEN.length < 50) {
+      return {
+        success: false,
+        message: 'Invalid Page Access Token format. It appears to be too short.'
       };
     }
 
@@ -284,9 +341,27 @@ export class TaggedMediaService {
         this.logger.error('Request object received (circular structure handled)');
       }
       
+      // Provide specific error messages based on the error response
+      let errorMessage = 'Error testing Instagram connection';
+      if (error.response && error.response.data && error.response.data.error) {
+        const instagramError = error.response.data.error;
+        errorMessage = `Instagram API Error: ${instagramError.message || 'Unknown error'}`;
+        
+        // Provide specific guidance based on error code
+        if (instagramError.code === 100) {
+          if (instagramError.error_subcode === 33) {
+            errorMessage += ' - The Instagram Business Account ID may be incorrect, the account may not exist, or you may not have proper permissions. Please verify your INSTAGRAM_IG_ID value.';
+          } else {
+            errorMessage += ' - This is a bad request error. Check your Instagram Business Account ID and access token.';
+          }
+        } else if (instagramError.code === 190) {
+          errorMessage += ' - Invalid access token. Please check your PAGE_ACCESS_TOKEN value.';
+        }
+      }
+      
       return {
         success: false,
-        message: 'Error testing Instagram connection',
+        message: errorMessage,
         errorName: error.name,
         errorMessage: error.message,
         errorCode: error.code,
@@ -458,9 +533,27 @@ export class TaggedMediaService {
         }
       }
       
+      // Provide specific error messages based on the error response
+      let errorMessage = 'Error checking for tagged media';
+      if (error.response && error.response.data && error.response.data.error) {
+        const instagramError = error.response.data.error;
+        errorMessage = `Instagram API Error: ${instagramError.message || 'Unknown error'}`;
+        
+        // Provide specific guidance based on error code
+        if (instagramError.code === 100) {
+          if (instagramError.error_subcode === 33) {
+            errorMessage += ' - The Instagram Business Account ID may be incorrect, the account may not exist, or you may not have proper permissions. Please verify your INSTAGRAM_IG_ID value.';
+          } else {
+            errorMessage += ' - This is a bad request error. Check your Instagram Business Account ID and access token.';
+          }
+        } else if (instagramError.code === 190) {
+          errorMessage += ' - Invalid access token. Please check your PAGE_ACCESS_TOKEN value.';
+        }
+      }
+      
       return {
         success: false,
-        message: 'Error checking for tagged media',
+        message: errorMessage,
         errorName: error.name,
         errorMessage: error.message,
         errorCode: error.code,
