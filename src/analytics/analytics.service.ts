@@ -418,6 +418,13 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
         .groupBy('a.mediaType')
         .getRawMany();
 
+      // Get last activity timestamp for the user
+      const lastActivity = await this.activityRepo
+        .createQueryBuilder('a')
+        .select('MAX(a.timestamp)', 'timestamp')
+        .where('a.userInstagramId = :uid', { uid: member.user.instagram })
+        .getRawOne();
+
       const countMap = { STORY: 0, IMAGE: 0, VIDEO: 0 };
       for (const row of counts) {
         countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
@@ -445,6 +452,7 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
           post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
           reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
         },
+        lastActivity: lastActivity?.timestamp || null, // Add lastActivity field
       });
     }
 
