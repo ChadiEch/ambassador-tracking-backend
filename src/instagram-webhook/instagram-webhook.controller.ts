@@ -160,6 +160,40 @@ export class InstagramWebhookController {
     }
   }
 
+  // Test Instagram credentials
+  @Get('test-credentials')
+  async testInstagramCredentials() {
+    console.log('Instagram credentials test endpoint called');
+    try {
+      const result = await this.taggedMediaService.testInstagramCredentials();
+      console.log('Credentials test result:', result);
+      return result;
+    } catch (error) {
+      console.error('Error in testInstagramCredentials:', error);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      // Return a more detailed error response instead of throwing HttpException
+      // Make sure we don't include circular references
+      const errorResponse: any = {
+        success: false,
+        message: 'Failed to test Instagram credentials',
+        error: {
+          name: error.name || 'UnknownError',
+          message: error.message || 'An unknown error occurred'
+        }
+      };
+      
+      // Only include stack trace in development
+      if (process.env.NODE_ENV === 'development') {
+        errorResponse.error.stack = error.stack;
+      }
+      
+      return errorResponse;
+    }
+  }
+
   // --- 1. IG DM MESSAGE HANDLER ---
   @Post('messages')
   async handleMessages(@Body() body: any) {

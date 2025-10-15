@@ -30,6 +30,15 @@ export class TaggedMediaService {
     this.logger.log(`Instagram Business Account ID: ${this.INSTAGRAM_BUSINESS_ACCOUNT_ID ? 'SET' : 'NOT SET'}`);
     this.logger.log(`Page Access Token: ${this.PAGE_ACCESS_TOKEN ? 'SET' : 'NOT SET'}`);
     
+    // Log actual values (masked for security)
+    if (this.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
+      this.logger.log(`Instagram Business Account ID length: ${this.INSTAGRAM_BUSINESS_ACCOUNT_ID.length}`);
+    }
+    
+    if (this.PAGE_ACCESS_TOKEN) {
+      this.logger.log(`Page Access Token length: ${this.PAGE_ACCESS_TOKEN.length}`);
+    }
+    
     // Validate configuration
     if (!this.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
       this.logger.error('Instagram Business Account ID is not configured! Please set INSTAGRAM_IG_ID in environment variables.');
@@ -38,6 +47,11 @@ export class TaggedMediaService {
     if (!this.PAGE_ACCESS_TOKEN) {
       this.logger.error('Page Access Token is not configured! Please set PAGE_ACCESS_TOKEN in environment variables.');
     }
+    
+    // Log the source of configuration values
+    this.logger.log('Configuration sources:');
+    this.logger.log('- PAGE_ACCESS_TOKEN from configService:', !!this.configService.get<string>('PAGE_ACCESS_TOKEN'));
+    this.logger.log('- INSTAGRAM_IG_ID from configService:', !!this.configService.get<string>('INSTAGRAM_IG_ID'));
   }
 
   // Public method to validate configuration
@@ -66,6 +80,8 @@ export class TaggedMediaService {
     
     // Validate configuration first
     const configValidation = this.validateConfiguration();
+    this.logger.log('Manual check - Configuration validation result:', this.safeStringify(configValidation));
+    
     if (!configValidation.valid) {
       this.logger.error('Configuration validation failed:', configValidation.errors);
       return {
@@ -80,6 +96,103 @@ export class TaggedMediaService {
     }
     
     return this.checkForTaggedMedia();
+  }
+
+  // Public method to test Instagram credentials
+  async testInstagramCredentials() {
+    if (!this.PAGE_ACCESS_TOKEN || !this.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
+      return {
+        success: false,
+        message: 'Missing Instagram credentials',
+        pageAccessTokenSet: !!this.PAGE_ACCESS_TOKEN,
+        instagramBusinessAccountIdSet: !!this.INSTAGRAM_BUSINESS_ACCOUNT_ID
+      };
+    }
+
+    try {
+      // Test if the access token is valid by fetching the Instagram account info
+      const accountInfoUrl = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/me`;
+      const accountParams = {
+        access_token: this.PAGE_ACCESS_TOKEN,
+        fields: 'id,name,accounts{instagram_business_account}'
+      };
+
+      this.logger.log(`Testing access token validity: ${accountInfoUrl}`);
+      const accountResponse = await lastValueFrom(
+        this.httpService.get(accountInfoUrl, { params: accountParams })
+      );
+
+      this.logger.log(`Account info response status: ${accountResponse.status}`);
+      this.logger.log(`Account info response data: ${this.safeStringify(accountResponse.data)}`);
+
+      // Check if we can access the Instagram business account
+      let instagramAccountId = this.INSTAGRAM_BUSINESS_ACCOUNT_ID;
+      
+      // If we don't have the Instagram account ID, try to extract it from the response
+      if (!instagramAccountId && accountResponse.data?.accounts?.data) {
+        const instagramAccount = accountResponse.data.accounts.data.find(
+          (account: any) => account.instagram_business_account
+        );
+        if (instagramAccount) {
+          instagramAccountId = instagramAccount.instagram_business_account.id;
+          this.logger.log(`Discovered Instagram Business Account ID: ${instagramAccountId}`);
+        }
+      }
+
+      if (!instagramAccountId) {
+        return {
+          success: false,
+          message: 'Instagram Business Account ID not found',
+          accountInfo: accountResponse.data
+        };
+      }
+
+      // Test the Instagram Business Account endpoint
+      const instagramUrl = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/${instagramAccountId}`;
+      const instagramParams = {
+        access_token: this.PAGE_ACCESS_TOKEN,
+        fields: 'id,username,name,profile_picture_url'
+      };
+
+      this.logger.log(`Testing Instagram Business Account: ${instagramUrl}`);
+      const instagramResponse = await lastValueFrom(
+        this.httpService.get(instagramUrl, { params: instagramParams })
+      );
+
+      this.logger.log(`Instagram response status: ${instagramResponse.status}`);
+      this.logger.log(`Instagram response data: ${this.safeStringify(instagramResponse.data)}`);
+
+      return {
+        success: true,
+        message: 'Instagram credentials are valid',
+        facebookAccount: accountResponse.data,
+        instagramAccount: instagramResponse.data
+      };
+    } catch (error) {
+      this.logger.error('Error testing Instagram credentials:');
+      this.logger.error('Error name:', error.name);
+      this.logger.error('Error message:', error.message);
+      this.logger.error('Error code:', error.code);
+      this.logger.error('Error stack:', error.stack);
+      
+      if (error.response) {
+        this.logger.error('Response status:', error.response.status);
+        this.logger.error('Response headers:', this.safeStringify(error.response.headers));
+        this.logger.error('Response data:', this.safeStringify(error.response.data));
+      }
+      
+      return {
+        success: false,
+        message: 'Error testing Instagram credentials',
+        errorName: error.name,
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorResponse: error.response ? {
+          status: error.response.status,
+          data: error.response.data
+        } : undefined
+      };
+    }
   }
 
   // Public method for testing Instagram API connection
@@ -224,13 +337,19 @@ export class TaggedMediaService {
   @Cron(CronExpression.EVERY_HOUR)
   async checkForTaggedMedia() {
     this.logger.log('Automatic tag check initiated');
-    if (!this.PAGE_ACCESS_TOKEN || !this.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
+    
+    // Validate configuration first
+    const configValidation = this.validateConfiguration();
+    this.logger.log('Configuration validation result:', this.safeStringify(configValidation));
+    
+    if (!configValidation.valid) {
       this.logger.warn('Missing Instagram credentials. Skipping tag check.');
       return {
         success: false,
         message: 'Missing Instagram credentials',
         pageAccessTokenSet: !!this.PAGE_ACCESS_TOKEN,
         instagramBusinessAccountIdSet: !!this.INSTAGRAM_BUSINESS_ACCOUNT_ID,
+        configErrors: configValidation.errors,
         count: 0
       };
     }
@@ -301,6 +420,9 @@ export class TaggedMediaService {
       this.logger.error('Error code:', error.code);
       this.logger.error('Error stack:', error.stack);
       
+      // Log additional error details
+      this.logger.error('Full error object keys:', Object.keys(error));
+      
       if (error.response) {
         this.logger.error('Response status:', error.response.status);
         this.logger.error('Response headers:', this.safeStringify(error.response.headers));
@@ -309,6 +431,16 @@ export class TaggedMediaService {
       
       if (error.request) {
         this.logger.error('Request object received (circular structure handled)');
+        this.logger.error('Request keys:', Object.keys(error.request));
+      }
+      
+      // Try to get more details about the error
+      if (error.config) {
+        this.logger.error('Request config:', this.safeStringify({
+          url: error.config.url,
+          method: error.config.method,
+          params: error.config.params
+        }));
       }
       
       return {
@@ -318,6 +450,11 @@ export class TaggedMediaService {
         errorMessage: error.message,
         errorCode: error.code,
         errorStack: error.stack,
+        errorDetails: {
+          hasResponse: !!error.response,
+          hasRequest: !!error.request,
+          hasConfig: !!error.config
+        },
         errorResponse: error.response ? {
           status: error.response.status,
           data: error.response.data
