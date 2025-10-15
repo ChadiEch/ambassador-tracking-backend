@@ -29,11 +29,56 @@ export class TaggedMediaService {
     // Log configuration for debugging
     this.logger.log(`Instagram Business Account ID: ${this.INSTAGRAM_BUSINESS_ACCOUNT_ID ? 'SET' : 'NOT SET'}`);
     this.logger.log(`Page Access Token: ${this.PAGE_ACCESS_TOKEN ? 'SET' : 'NOT SET'}`);
+    
+    // Validate configuration
+    if (!this.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
+      this.logger.error('Instagram Business Account ID is not configured! Please set INSTAGRAM_IG_ID in environment variables.');
+    }
+    
+    if (!this.PAGE_ACCESS_TOKEN) {
+      this.logger.error('Page Access Token is not configured! Please set PAGE_ACCESS_TOKEN in environment variables.');
+    }
+  }
+
+  // Public method to validate configuration
+  validateConfiguration(): { valid: boolean; errors: string[]; instagramBusinessAccountId: string; pageAccessToken: string } {
+    const errors: string[] = [];
+    
+    if (!this.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
+      errors.push('Instagram Business Account ID (INSTAGRAM_IG_ID) is not configured');
+    }
+    
+    if (!this.PAGE_ACCESS_TOKEN) {
+      errors.push('Page Access Token (PAGE_ACCESS_TOKEN) is not configured');
+    }
+    
+    return {
+      valid: errors.length === 0,
+      errors,
+      instagramBusinessAccountId: this.INSTAGRAM_BUSINESS_ACCOUNT_ID ? 'SET' : 'NOT SET',
+      pageAccessToken: this.PAGE_ACCESS_TOKEN ? 'SET' : 'NOT SET'
+    };
   }
 
   // Public method for manual triggering
   async manuallyCheckForTaggedMedia() {
     this.logger.log('Manual tag check initiated');
+    
+    // Validate configuration first
+    const configValidation = this.validateConfiguration();
+    if (!configValidation.valid) {
+      this.logger.error('Configuration validation failed:', configValidation.errors);
+      return {
+        success: false,
+        message: 'Configuration validation failed',
+        errors: configValidation.errors,
+        config: {
+          instagramBusinessAccountId: configValidation.instagramBusinessAccountId,
+          pageAccessToken: configValidation.pageAccessToken
+        }
+      };
+    }
+    
     return this.checkForTaggedMedia();
   }
 

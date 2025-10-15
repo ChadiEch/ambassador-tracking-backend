@@ -68,10 +68,20 @@ export class InstagramWebhookController {
       };
     } catch (error) {
       console.error('Error in manuallyCheckTags:', error);
-      throw new HttpException(
-        'Failed to check for tagged media',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      // Return a more detailed error response instead of throwing HttpException
+      return {
+        success: false,
+        message: 'Failed to check for tagged media',
+        error: {
+          name: error.name || 'UnknownError',
+          message: error.message || 'An unknown error occurred',
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        }
+      };
     }
   }
 
@@ -85,10 +95,20 @@ export class InstagramWebhookController {
       return result;
     } catch (error) {
       console.error('Error in testInstagramConnection:', error);
-      throw new HttpException(
-        'Failed to test Instagram connection',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      // Return a more detailed error response instead of throwing HttpException
+      return {
+        success: false,
+        message: 'Failed to test Instagram connection',
+        error: {
+          name: error.name || 'UnknownError',
+          message: error.message || 'An unknown error occurred',
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        }
+      };
     }
   }
 
@@ -102,10 +122,20 @@ export class InstagramWebhookController {
       return result;
     } catch (error) {
       console.error('Error in debugUserMapping:', error);
-      throw new HttpException(
-        'Failed to debug user mapping',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      // Return a more detailed error response instead of throwing HttpException
+      return {
+        success: false,
+        message: 'Failed to debug user mapping',
+        error: {
+          name: error.name || 'UnknownError',
+          message: error.message || 'An unknown error occurred',
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        }
+      };
     }
   }
 
