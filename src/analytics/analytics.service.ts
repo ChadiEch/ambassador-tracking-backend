@@ -117,9 +117,10 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
   const from = startDate || defaultStart;
   const to = endDate || now;
 
-  // Calculate the dynamic factor based on date range
+  // Calculate the number of complete weeks in the date range
   const daysDiff = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
-  const weeksFactor = Math.max(daysDiff / 7, 1);
+  const completeWeeks = Math.floor(daysDiff / 7);
+  const weeksCount = Math.max(completeWeeks, 1); // At least 1 week
 
   // Optimized query with JOINs to avoid N+1 problem
   const users = await this.userRepo
@@ -130,10 +131,10 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
 
   const globalRule = await this.rulesRepo.findOne({ where: {} });
   
-  // Calculate dynamic expected values based on the date range
-  const expectedStories = (globalRule?.stories_per_week ?? 3) * weeksFactor;
-  const expectedPosts = (globalRule?.posts_per_week ?? 1) * weeksFactor;
-  const expectedReels = (globalRule?.reels_per_week ?? 1) * weeksFactor;
+  // Calculate expected values based on complete weeks
+  const expectedStories = (globalRule?.stories_per_week ?? 3) * weeksCount;
+  const expectedPosts = (globalRule?.posts_per_week ?? 1) * weeksCount;
+  const expectedReels = (globalRule?.reels_per_week ?? 1) * weeksCount;
   
   // Batch fetch all activities for the period
   const allActivities = await this.activityRepo
@@ -399,9 +400,10 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
     const from = startDate || new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
     const to = endDate || now;
 
-    // Calculate the dynamic factor based on date range
+    // Calculate the number of complete weeks in the date range
     const daysDiff = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
-    const weeksFactor = Math.max(daysDiff / 7, 1);
+    const completeWeeks = Math.floor(daysDiff / 7);
+    const weeksCount = Math.max(completeWeeks, 1); // At least 1 week
 
     const team = await this.teamRepo
       .createQueryBuilder('team')
@@ -414,10 +416,10 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
 
     const globalRule = await this.rulesRepo.findOne({ where: {} });
   
-    // Calculate dynamic expected values based on the date range
-    const expectedStories = (globalRule?.stories_per_week ?? 3) * weeksFactor;
-    const expectedPosts = (globalRule?.posts_per_week ?? 1) * weeksFactor;
-    const expectedReels = (globalRule?.reels_per_week ?? 1) * weeksFactor;
+    // Calculate expected values based on complete weeks
+    const expectedStories = (globalRule?.stories_per_week ?? 3) * weeksCount;
+    const expectedPosts = (globalRule?.posts_per_week ?? 1) * weeksCount;
+    const expectedReels = (globalRule?.reels_per_week ?? 1) * weeksCount;
   
     const results: AmbassadorSummary[] = [];
 
