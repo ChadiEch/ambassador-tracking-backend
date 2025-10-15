@@ -117,67 +117,74 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
   const from = startDate || defaultStart;
   const to = endDate || now;
 
-  const users = await this.userRepo.find();
+  // Optimized query with JOINs to avoid N+1 problem
+  const users = await this.userRepo
+    .createQueryBuilder('user')
+    .leftJoinAndSelect('user.teamMemberships', 'teamMemberships')
+    .leftJoinAndSelect('teamMemberships.team', 'team')
+    .getMany();
+
   const globalRule = await this.rulesRepo.findOne({ where: {} });
+  
+  // Batch fetch all activities for the period
+  const allActivities = await this.activityRepo
+    .createQueryBuilder('a')
+    .where('a.timestamp BETWEEN :start AND :end', {
+      start: from.toISOString(),
+      end: to.toISOString(),
+    })
+    .getMany();
+
   const results: AmbassadorSummary[] = [];
 
   for (const user of users) {
-    const counts = await this.activityRepo
-      .createQueryBuilder('a')
-      .select('a.mediaType', 'mediaType')
-      .addSelect('COUNT(*)', 'count')
-      .where('a.userInstagramId = :uid', { uid: user.instagram })
-      .andWhere('a.timestamp BETWEEN :start AND :end', {
-        start: from.toISOString(),
-        end: to.toISOString(),
-      })
-      .groupBy('a.mediaType')
-      .getRawMany();
-
+    // Filter activities for this user
+    const userActivities = allActivities.filter(a => a.userInstagramId === user.instagram);
+    
     const countMap: Record<string, number> = {
       STORY: 0,
       IMAGE: 0,
       VIDEO: 0,
     };
 
-    for (const row of counts) {
-      countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
+    for (const activity of userActivities) {
+      countMap[activity.mediaType.toUpperCase()] = (countMap[activity.mediaType.toUpperCase()] || 0) + 1;
     }
 
-    // ✅ Get last activity timestamp for the user
-    const lastActivity = await this.activityRepo
-      .createQueryBuilder('a')
-      .select('a.timestamp', 'timestamp')
-      .where('a.userInstagramId = :uid', { uid: user.instagram })
-      .orderBy('a.timestamp', 'DESC')
-      .limit(1)
-      .getRawOne();
+    // Get last activity timestamp for the user
+    const lastActivity = userActivities.length > 0 
+      ? userActivities.reduce((latest, current) => 
+          new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest
+        )
+      : null;
 
-    results.push({
-      id: user.id,
-      name: user.name,
-      photoUrl: user.photoUrl,
-      role: user.role,
-      active: user.active,
-      edits: [], // if needed
-      actual: {
-        stories: countMap.STORY,
-        posts: countMap.IMAGE,
-        reels: countMap.VIDEO,
-      },
-      expected: {
-        stories: globalRule?.stories_per_week ?? 3,
-        posts: globalRule?.posts_per_week ?? 1,
-        reels: globalRule?.reels_per_week ?? 1,
-      },
-      compliance: {
-        story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
-        post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
-        reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
-      },
-      // ✅ Add lastActivity field
-      lastActivity: lastActivity?.timestamp || null,
-    });
+    // Only include ambassadors and leaders in the results
+    if (user.role !== 'admin') {
+      results.push({
+        id: user.id,
+        name: user.name,
+        photoUrl: user.photoUrl,
+        role: user.role as 'ambassador' | 'leader', // Type assertion to match expected type
+        active: user.active,
+        edits: [],
+        actual: {
+          stories: countMap.STORY,
+          posts: countMap.IMAGE,
+          reels: countMap.VIDEO,
+        },
+        expected: {
+          stories: globalRule?.stories_per_week ?? 3,
+          posts: globalRule?.posts_per_week ?? 1,
+          reels: globalRule?.reels_per_week ?? 1,
+        },
+        compliance: {
+          story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
+          post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
+          reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
+        },
+        lastActivity: lastActivity?.timestamp || undefined, // Use undefined instead of null
+      });
+    }
   }
 
   return results;
@@ -396,6 +403,9 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
     const results: AmbassadorSummary[] = [];
 
     for (const member of team.members) {
+      // Skip admin users
+      if (member.user.role === 'admin') continue;
+      
       const counts = await this.activityRepo
         .createQueryBuilder('a')
         .select('a.mediaType', 'mediaType')
@@ -417,7 +427,7 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
         id: member.user.id,
         name: member.user.name,
         photoUrl: member.user.photoUrl,
-        role: member.user.role,
+        role: member.user.role as 'ambassador' | 'leader', // Type assertion to match expected type
         active: member.user.active,
         edits: [],
         actual: {

@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { HttpModule } from '@nestjs/axios';
-import { MailerModule } from '@nestjs-modules/mailer'; // ✅ Mailer module
+import { MailerModule } from '@nestjs-modules/mailer';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 import { UsersModule } from './users/users.module';
 import { TeamsModule } from './teams/teams.module';
@@ -16,40 +18,56 @@ import { AuthModule } from './auth/auth.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthController } from './auth/auth.controller';
 
-import { WarningsModule } from './warnings/warnings.module'; // ✅ New warnings module
+import { WarningsModule } from './warnings/warnings.module';
+import { LoggingModule } from './logging/logging.module';
+import appConfig from './config/app.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      load: [appConfig],
     }),
     ScheduleModule.forRoot(),
     HttpModule,
     TypeOrmModule.forRootAsync({
-      useFactory: () => ({
+      useFactory: (configService: ConfigService) => ({
         type: 'postgres',
-        url: process.env.database,
+        url: configService.get<string>('database.url'),
         autoLoadEntities: true,
-        synchronize: true, // ⚠️ Set false for production!
-      }),
-    }),
-    // ✅ Mailer config (replace with real SMTP credentials)
-    MailerModule.forRoot({
-      transport: {
-        host: process.env.SMTP_HOST || 'smtp.yourprovider.com',
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: false,
-        auth: {
-          user: process.env.SMTP_USER || 'username',
-          pass: 'railway',
+        synchronize: configService.get<string>('NODE_ENV') !== 'production',
+        poolSize: 10,
+        extra: {
+          connectionLimit: 10,
+          idleTimeoutMillis: 60000,
+          keepAlive: true,
         },
-      },
-      defaults: {
-        from: '"Ambassador Tracking" <no-reply@yourdomain.com>',
-      },
+      }),
+      inject: [ConfigService],
     }),
-    // Your existing modules
+    MailerModule.forRootAsync({
+      useFactory: (configService: ConfigService) => ({
+        transport: {
+          host: configService.get<string>('mailer.host'),
+          port: configService.get<number>('mailer.port'),
+          secure: configService.get<boolean>('mailer.secure'),
+          auth: {
+            user: configService.get<string>('mailer.user'),
+            pass: configService.get<string>('mailer.password'),
+          },
+        },
+        defaults: {
+          from: configService.get<string>('mailer.from'),
+        },
+      }),
+      inject: [ConfigService],
+    }),
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'docs'),
+      serveRoot: '/docs',
+    }),
+    LoggingModule,
     AuthModule,
     InstagramWebhookModule,
     UsersModule,
@@ -59,7 +77,6 @@ import { WarningsModule } from './warnings/warnings.module'; // ✅ New warnings
     NotesModule,
     AnalyticsModule,
     FeedbackFormsModule,
-    // ✅ Add warnings module last
     WarningsModule,
   ],
   controllers: [AuthController],

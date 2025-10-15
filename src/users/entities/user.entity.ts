@@ -4,6 +4,8 @@ import {
   Column,
   ManyToOne,
   OneToMany,
+  BeforeInsert,
+  BeforeUpdate,
 } from 'typeorm';
 import { Team } from 'src/teams/entities/team.entity';
 import { TeamMember } from 'src/team-members/entities/team-member.entity';
@@ -11,6 +13,8 @@ import { AmbassadorActivity } from 'src/entities/ambassador-activity.entity';
 import { Note } from 'src/notes/entities/note.entity';
 import { Warning } from 'src/warnings/entities/warning.entity';
 import { UserDeactivation } from './UserDeactivation.entity';
+import * as bcrypt from 'bcrypt';
+
 @Entity()
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -35,7 +39,7 @@ export class User {
   active: boolean;
 
   @Column()
-  role: 'ambassador' | 'leader';
+  role: 'ambassador' | 'leader' | 'admin';
 
   @Column({ nullable: true })
   phone: string;
@@ -75,15 +79,21 @@ export class User {
 
   @Column({ type: 'timestamptz', nullable: true })
   warningPausedUntil?: Date;
+  
   @Column({ default: 0, nullable: false })
-warningsCount: number;
-
+  warningsCount: number;
 
   @Column({ type: 'text', nullable: true })
   deactivationReason?: string;
 
   @OneToMany(() => UserDeactivation, d => d.user)
-deactivations: UserDeactivation[];
+  deactivations: UserDeactivation[];
 
+  @BeforeInsert()
+  @BeforeUpdate()
+  async hashPassword() {
+    if (this.password) {
+      this.password = await bcrypt.hash(this.password, 10);
+    }
+  }
 }
-

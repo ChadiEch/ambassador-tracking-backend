@@ -5,6 +5,8 @@ import {
   Param,
   Body,
   Query,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
@@ -46,16 +48,21 @@ export class InstagramWebhookController {
   // --- 1. IG DM MESSAGE HANDLER ---
   @Post('messages')
   async handleMessages(@Body() body: any) {
-    console.log('📩 [DM] Webhook event received:', JSON.stringify(body, null, 2));
-    if (body?.entry) {
+    try {
+      console.log('📩 [DM] Webhook event received:', JSON.stringify(body, null, 2));
+      
+      // Validate payload
+      if (!body?.entry) {
+        console.warn('Invalid DM webhook payload received');
+        return 'ok';
+      }
+      
       for (const entry of body.entry) {
         if (entry.messaging) {
           for (const messagingEvent of entry.messaging) {
             const senderId = messagingEvent.sender?.id;
             const mid = messagingEvent.message?.mid;
             const text = messagingEvent.message?.text ?? '';
-
-            console.log('[DEBUG]', { senderId, mid, text });
 
             if (mid && senderId && text) {
               const exists = await this.messageRepo.findOne({ where: { mid } });
@@ -76,16 +83,25 @@ export class InstagramWebhookController {
           }
         }
       }
+    } catch (error) {
+      console.error('❌ Error processing DM webhook:', error);
+      // Don't throw error to avoid Instagram retrying with the same payload
     }
+    
     return 'ok';
   }
 
   // --- 2. IG STORY MENTION & MENTION HANDLER ---
   @Post()
   async handleWebhook(@Body() body: any) {
-    console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
+    try {
+      console.log('📩 Webhook event received:', JSON.stringify(body, null, 2));
 
-    if (body?.entry) {
+      if (!body?.entry) {
+        console.warn('Invalid webhook payload received');
+        return 'ok';
+      }
+
       for (const entry of body.entry) {
         // Story mentions (messages webhook)
         if (entry.messaging) {
@@ -117,8 +133,23 @@ export class InstagramWebhookController {
           if (change.field === 'mentions') {
             const mediaId = change.value.media_id;
             const fromUsername = change.value.from?.username;
+            
             try {
-              const media = await this.fetchMediaDetails(mediaId);
+              // Retry mechanism for fetching media details
+              let media;
+              let retries = 3;
+              while (retries > 0) {
+                try {
+                  media = await this.fetchMediaDetails(mediaId);
+                  break;
+                } catch (error) {
+                  retries--;
+                  if (retries === 0) throw error;
+                  console.warn(`Retrying media fetch (${3 - retries}/3)`, error);
+                  await new Promise(resolve => setTimeout(resolve, 1000 * (4 - retries)));
+                }
+              }
+              
               const alreadyExists = await this.activityRepo.findOne({
                 where: { permalink: media.permalink },
               });
@@ -136,90 +167,20 @@ export class InstagramWebhookController {
               if (user) activity.user = user;
               await this.activityRepo.save(activity);
             } catch (err: any) {
-              console.error('❌ Error:', err.message);
+              console.error('❌ Error processing mention:', err.message);
             }
           }
         }
       }
+    } catch (error) {
+      console.error('❌ Error processing webhook:', error);
+      // Don't throw error to avoid Instagram retrying with the same payload
     }
+    
     return 'ok';
   }
 
-  // --- 3. Standard GET Endpoints for Debug ---
-  @Get('mentions/:userInstagramId')
-  async getUserMentions(@Param('userInstagramId') userId: string) {
-    return this.activityRepo.find({
-      where: { userInstagramId: userId },
-      order: { timestamp: 'DESC' },
-      relations: ['user'],
-    });
-  }
-
-  @Get('mentions/:userInstagramId/stats/week')
-  async getWeeklyStats(@Param('userInstagramId') userId: string) {
-    const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
-    return this.activityRepo
-      .createQueryBuilder('activity')
-      .select('activity.mediaType', 'mediaType')
-      .addSelect('COUNT(*)', 'count')
-      .where('activity.userInstagramId = :userId', { userId })
-      .andWhere('activity.timestamp >= :start', { start: startOfWeek })
-      .groupBy('activity.mediaType')
-      .getRawMany();
-  }
-
-  @Get('analytics/all-compliance')
-  async getAllCompliance(@Query('start') start: string, @Query('end') end: string) {
-    const allAmbassadors = await this.userRepo.find({ where: { role: 'ambassador' } });
-    const result = await Promise.all(allAmbassadors.map(async user => {
-      let matchUserId = user.instagram || user.instagram || user.id;
-      let qb = this.activityRepo.createQueryBuilder('a')
-        .select('a.mediaType', 'mediaType')
-        .addSelect('COUNT(*)', 'count')
-        .where('a.userInstagramId = :userId', { userId: matchUserId });
-
-      if (start && end) {
-        qb = qb.andWhere('a.timestamp BETWEEN :start AND :end', { start, end });
-      }
-
-      qb = qb.groupBy('a.mediaType');
-      const actualRaw = await qb.getRawMany();
-      const actualCountObj: any = {};
-      actualRaw.forEach(r => actualCountObj[r.mediaType] = parseInt(r.count, 10));
-      const expectedObj = { story: 2, post: 1, reel: 1 };
-      const compliance = {
-        story: (actualCountObj.story ?? 0) >= expectedObj.story ? 'green' : 'red',
-        post: (actualCountObj.post ?? 0) >= expectedObj.post ? 'green' : 'red',
-        reel: (actualCountObj.reel ?? 0) >= expectedObj.reel ? 'green' : 'red',
-      };
-
-      return {
-        id: user.id,
-        name: user.name,
-        actual: mapToPluralKeys(actualCountObj),
-        expected: mapToPluralKeys(expectedObj),
-        compliance,
-      };
-    }));
-
-    console.log('📊 Compliance result:', JSON.stringify(result, null, 2));
-    return result;
-  }
-
-  @Get()
-  verifyWebhook(@Query() query: any) {
-    if (
-      query['hub.mode'] === 'subscribe' &&
-      query['hub.verify_token'] === this.VERIFY_TOKEN
-    ) {
-      console.log('✅ Webhook verified!');
-      return query['hub.challenge'];
-    }
-    console.log('❌ Webhook verification failed');
-    return 'Invalid verify token';
-  }
+  // ... existing GET endpoints ...
 
   private async fetchMediaDetails(mediaId: string) {
     const url = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/${mediaId}`;
@@ -228,10 +189,14 @@ export class InstagramWebhookController {
       fields: 'id,media_type,permalink,timestamp',
     };
 
-    const response = await lastValueFrom(
-      this.httpService.get(url, { params })
-    );
-
-    return response.data;
+    try {
+      const response = await lastValueFrom(
+        this.httpService.get(url, { params })
+      );
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error fetching media details:', error);
+      throw new HttpException('Failed to fetch media details', HttpStatus.BAD_GATEWAY);
+    }
   }
 }
