@@ -58,6 +58,14 @@ The system handles the following Instagram webhook events:
 4. **Test Webhook**
    Use the Facebook Webhooks testing tool to send test events to your webhook.
 
+### Access Token Issues
+
+Instagram access tokens expire periodically. If you see authentication errors:
+
+1. **Generate a new long-lived token** using the Facebook Graph API Explorer
+2. **Update your .env file** with the new token
+3. **Re-run the setup script** to re-subscribe to webhooks
+
 ### Common Issues
 
 1. **Duplicate Events**
@@ -78,3 +86,11 @@ GET /webhook (for verification)
 ```
 
 Make sure to configure this URL in your Facebook App's Webhooks settings.
+
+## Token Refresh
+
+Instagram tokens expire after 60 days. Set up a periodic task to refresh your tokens:
+
+1. Store your app ID and app secret
+2. Use the token refresh endpoint before expiration
+3. Update your environment variables with the new token

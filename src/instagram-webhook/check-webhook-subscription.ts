@@ -3,10 +3,12 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
-const INSTAGRAM_BUSINESS_ACCOUNT_ID = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID;
+const INSTAGRAM_BUSINESS_ACCOUNT_ID = process.env.INSTAGRAM_IG_ID; // Changed this line
 
 if (!PAGE_ACCESS_TOKEN || !INSTAGRAM_BUSINESS_ACCOUNT_ID) {
-  console.error('Missing required environment variables');
+  console.error('Missing required environment variables:');
+  console.error('- PAGE_ACCESS_TOKEN:', PAGE_ACCESS_TOKEN ? 'SET' : 'MISSING');
+  console.error('- INSTAGRAM_BUSINESS_ACCOUNT_ID (INSTAGRAM_IG_ID):', INSTAGRAM_BUSINESS_ACCOUNT_ID ? 'SET' : 'MISSING');
   process.exit(1);
 }
 
