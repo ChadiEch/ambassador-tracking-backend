@@ -48,17 +48,26 @@ export class InstagramWebhookController {
     this.PAGE_ACCESS_TOKEN = this.configService.get<string>('PAGE_ACCESS_TOKEN') ?? '';
   }
 
+  // Health check endpoint
+  @Get('health')
+  healthCheck() {
+    return { status: 'OK', message: 'Instagram webhook service is running' };
+  }
+
   // Manual trigger for checking tagged media (for testing purposes)
   @Get('check-tags')
   async manuallyCheckTags() {
+    console.log('Manual tag check endpoint called');
     try {
       const result = await this.taggedMediaService.manuallyCheckForTaggedMedia();
+      console.log('Tag check result:', result);
       return {
         success: true,
         message: 'Tag check completed',
         data: result
       };
     } catch (error) {
+      console.error('Error in manuallyCheckTags:', error);
       throw new HttpException(
         'Failed to check for tagged media',
         HttpStatus.INTERNAL_SERVER_ERROR,

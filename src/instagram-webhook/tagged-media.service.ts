@@ -29,15 +29,21 @@ export class TaggedMediaService {
 
   // Public method for manual triggering
   async manuallyCheckForTaggedMedia() {
+    this.logger.log('Manual tag check initiated');
     return this.checkForTaggedMedia();
   }
 
   // Run every hour to check for new tagged media
   @Cron(CronExpression.EVERY_HOUR)
   async checkForTaggedMedia() {
+    this.logger.log('Automatic tag check initiated');
     if (!this.PAGE_ACCESS_TOKEN || !this.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
       this.logger.warn('Missing Instagram credentials. Skipping tag check.');
-      return;
+      return {
+        success: false,
+        message: 'Missing Instagram credentials',
+        count: 0
+      };
     }
 
     try {
@@ -50,6 +56,7 @@ export class TaggedMediaService {
         fields: 'id,media_type,permalink,timestamp,username',
       };
 
+      this.logger.log(`Making request to: ${url}`);
       const response = await lastValueFrom(
         this.httpService.get(url, { params })
       );
