@@ -57,21 +57,102 @@ export class TaggedMediaService {
       };
 
       this.logger.log(`Testing Instagram connection to: ${url}`);
+      this.logger.log(`With params: ${JSON.stringify(params)}`);
+      
       const response = await lastValueFrom(
         this.httpService.get(url, { params })
       );
 
+      this.logger.log(`Account info response status: ${response.status}`);
+      this.logger.log(`Account info response data: ${JSON.stringify(response.data, null, 2)}`);
+
+      // Also test the tags endpoint to make sure it's accessible
+      const tagsUrl = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/${this.INSTAGRAM_BUSINESS_ACCOUNT_ID}/tags`;
+      const tagsParams = {
+        access_token: this.PAGE_ACCESS_TOKEN,
+        fields: 'id,media_type,permalink,timestamp,username',
+      };
+
+      this.logger.log(`Testing tags endpoint: ${tagsUrl}`);
+      const tagsResponse = await lastValueFrom(
+        this.httpService.get(tagsUrl, { params: tagsParams })
+      );
+
+      this.logger.log(`Tags endpoint response status: ${tagsResponse.status}`);
+      this.logger.log(`Tags endpoint response data keys: ${Object.keys(tagsResponse.data || {})}`);
+      
+      if (tagsResponse.data) {
+        this.logger.log(`Tags endpoint response data sample: ${JSON.stringify({
+          ...tagsResponse.data,
+          data: Array.isArray(tagsResponse.data.data) ? 
+            `${tagsResponse.data.data.length} items` : 
+            tagsResponse.data.data
+        }, null, 2)}`);
+      }
+
       return {
         success: true,
         message: 'Instagram API connection successful',
-        accountInfo: response.data
+        accountInfo: response.data,
+        tagsEndpointAccessible: true,
+        tagsEndpointResponse: {
+          status: tagsResponse.status,
+          hasData: !!tagsResponse.data,
+          dataItemCount: Array.isArray(tagsResponse.data?.data) ? tagsResponse.data.data.length : 0
+        }
       };
     } catch (error) {
-      this.logger.error('Error testing Instagram connection:', error.response?.data || error.message);
+      this.logger.error('Error testing Instagram connection:');
+      this.logger.error('Error name:', error.name);
+      this.logger.error('Error message:', error.message);
+      this.logger.error('Error code:', error.code);
+      this.logger.error('Error stack:', error.stack);
+      
+      if (error.response) {
+        this.logger.error('Response status:', error.response.status);
+        this.logger.error('Response headers:', JSON.stringify(error.response.headers, null, 2));
+        this.logger.error('Response data:', JSON.stringify(error.response.data, null, 2));
+      }
+      
+      if (error.request) {
+        this.logger.error('Request data:', JSON.stringify(error.request, null, 2));
+      }
+      
       return {
         success: false,
         message: 'Error testing Instagram connection',
-        error: error.response?.data || error.message
+        errorName: error.name,
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorStack: error.stack,
+        errorResponse: error.response?.data,
+        errorStatus: error.response?.status
+      };
+    }
+  }
+
+  // Public method for debugging user mapping
+  async debugUserMapping() {
+    try {
+      const users = await this.userRepo.find();
+      const mapping = users.map(user => ({
+        id: user.id,
+        name: user.name,
+        instagram: user.instagram,
+        link: user.link,
+        extractedUsername: user.link ? this.extractInstagramUsernameFromLink(user.link) : null
+      }));
+      
+      return {
+        success: true,
+        userMapping: mapping,
+        totalUsers: users.length
+      };
+    } catch (error) {
+      this.logger.error('Error debugging user mapping:', error.message);
+      return {
+        success: false,
+        error: error.message
       };
     }
   }
@@ -85,6 +166,8 @@ export class TaggedMediaService {
       return {
         success: false,
         message: 'Missing Instagram credentials',
+        pageAccessTokenSet: !!this.PAGE_ACCESS_TOKEN,
+        instagramBusinessAccountIdSet: !!this.INSTAGRAM_BUSINESS_ACCOUNT_ID,
         count: 0
       };
     }
@@ -101,43 +184,118 @@ export class TaggedMediaService {
 
       this.logger.log(`Making request to: ${url}`);
       this.logger.log(`With params: ${JSON.stringify(params)}`);
+      
       const response = await lastValueFrom(
         this.httpService.get(url, { params })
       );
 
       this.logger.log(`Response status: ${response.status}`);
-      this.logger.log(`Response data: ${JSON.stringify(response.data, null, 2)}`);
+      this.logger.log(`Response headers: ${JSON.stringify(response.headers)}`);
+      this.logger.log(`Response data keys: ${Object.keys(response.data || {})}`);
+      
+      if (response.data) {
+        this.logger.log(`Response data: ${JSON.stringify(response.data, null, 2)}`);
+      }
 
-      this.logger.log(`Found ${response.data.data?.length || 0} tagged media items`);
+      // Check if response has the expected structure
+      if (!response.data) {
+        this.logger.error('Response data is missing');
+        return {
+          success: false,
+          message: 'Response data is missing',
+          responseStatus: response.status,
+          responseData: response.data
+        };
+      }
+
+      const taggedMediaItems = response.data.data || [];
+      this.logger.log(`Found ${taggedMediaItems.length} tagged media items`);
 
       // Process each tagged media
-      if (response.data.data && Array.isArray(response.data.data)) {
-        for (const media of response.data.data) {
-          await this.processTaggedMedia(media);
+      let processedCount = 0;
+      if (Array.isArray(taggedMediaItems)) {
+        for (const media of taggedMediaItems) {
+          try {
+            await this.processTaggedMedia(media);
+            processedCount++;
+          } catch (processError) {
+            this.logger.error(`Error processing individual media item:`, processError);
+          }
         }
       }
       
       return {
         success: true,
-        message: `Successfully checked for tagged media. Found ${response.data.data?.length || 0} items.`,
-        count: response.data.data?.length || 0
+        message: `Successfully checked for tagged media. Found ${taggedMediaItems.length} items. Processed ${processedCount} items.`,
+        count: taggedMediaItems.length,
+        processed: processedCount,
+        rawData: response.data
       };
     } catch (error) {
-      this.logger.error('Error checking for tagged media:', error.response?.data || error.message);
+      this.logger.error('Error checking for tagged media:');
+      this.logger.error('Error name:', error.name);
+      this.logger.error('Error message:', error.message);
+      this.logger.error('Error code:', error.code);
       this.logger.error('Error stack:', error.stack);
+      
+      if (error.response) {
+        this.logger.error('Response status:', error.response.status);
+        this.logger.error('Response headers:', JSON.stringify(error.response.headers, null, 2));
+        this.logger.error('Response data:', JSON.stringify(error.response.data, null, 2));
+      }
+      
+      if (error.request) {
+        this.logger.error('Request data:', JSON.stringify(error.request, null, 2));
+      }
+      
       return {
         success: false,
         message: 'Error checking for tagged media',
-        error: error.response?.data || error.message
+        errorName: error.name,
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorStack: error.stack,
+        errorResponse: error.response?.data,
+        errorStatus: error.response?.status
       };
     }
   }
 
   private async processTaggedMedia(media: any) {
     try {
+      // Validate media object
+      if (!media) {
+        this.logger.error('Media object is null or undefined');
+        return;
+      }
+      
+      this.logger.log(`Processing tagged media: ${JSON.stringify(media, null, 2)}`);
+      
+      // Check required fields
+      if (!media.username) {
+        this.logger.error('Media object missing username field');
+        return;
+      }
+      
+      if (!media.permalink) {
+        this.logger.error('Media object missing permalink field');
+        return;
+      }
+      
+      if (!media.media_type) {
+        this.logger.error('Media object missing media_type field');
+        return;
+      }
+      
+      if (!media.timestamp) {
+        this.logger.error('Media object missing timestamp field');
+        return;
+      }
+      
       this.logger.log(`Processing tagged media from user: ${media.username}`);
       this.logger.log(`Media permalink: ${media.permalink}`);
       this.logger.log(`Media type: ${media.media_type}`);
+      this.logger.log(`Media timestamp: ${media.timestamp}`);
       
       // Check if we've already processed this media
       const alreadyExists = await this.activityRepo.findOne({
@@ -156,6 +314,9 @@ export class TaggedMediaService {
       });
 
       this.logger.log(`Found user by instagram field: ${!!user}`);
+      if (user) {
+        this.logger.log(`User found: ${user.name} (${user.id})`);
+      }
 
       // If not found and the user has a link field, try to extract username from link
       if (!user) {
@@ -163,10 +324,10 @@ export class TaggedMediaService {
         const allUsers = await this.userRepo.find();
         for (const u of allUsers) {
           const extractedUsername = this.extractInstagramUsernameFromLink(u.link || '');
-          this.logger.log(`Checking user ${u.name} with link ${u.link}, extracted username: ${extractedUsername}`);
+          this.logger.log(`Checking user ${u.name} (${u.id}) with link ${u.link}, extracted username: ${extractedUsername}`);
           if (extractedUsername === media.username) {
             user = u;
-            this.logger.log(`Found matching user by link field: ${user.name}`);
+            this.logger.log(`Found matching user by link field: ${user.name} (${user.id})`);
             break;
           }
         }
@@ -174,6 +335,14 @@ export class TaggedMediaService {
 
       if (!user) {
         this.logger.log(`No user found for Instagram username: ${media.username}`);
+        // Log all users for debugging
+        const allUsers = await this.userRepo.find();
+        this.logger.log(`All users in system: ${JSON.stringify(allUsers.map(u => ({
+          id: u.id,
+          name: u.name,
+          instagram: u.instagram,
+          link: u.link
+        })), null, 2)}`);
       }
 
       const activity = new AmbassadorActivity();
@@ -186,7 +355,9 @@ export class TaggedMediaService {
       await this.activityRepo.save(activity);
       this.logger.log(`✅ Tagged media saved for user: ${media.username}${user ? ` (${user.name})` : ' (no matching user)'}`);
     } catch (error) {
-      this.logger.error(`Error processing tagged media ${media.permalink}:`, error.message);
+      this.logger.error(`Error processing tagged media ${media?.permalink || 'unknown'}:`, error.message);
+      this.logger.error('Error stack:', error.stack);
+      throw error; // Re-throw to be caught by the calling function
     }
   }
 
@@ -206,7 +377,12 @@ export class TaggedMediaService {
 
   // Helper function to extract Instagram username from link field
   private extractInstagramUsernameFromLink(link: string): string | null {
-    if (!link) return null;
+    if (!link) {
+      this.logger.log('extractInstagramUsernameFromLink: Empty link provided');
+      return null;
+    }
+    
+    this.logger.log(`extractInstagramUsernameFromLink: Processing link: ${link}`);
     
     // Remove trailing slashes
     link = link.replace(/\/$/, '');
@@ -219,9 +395,11 @@ export class TaggedMediaService {
     if (match && match[1]) {
       // Remove any query parameters or fragments
       const username = match[1].split(/[?#]/)[0];
+      this.logger.log(`extractInstagramUsernameFromLink: Extracted username: ${username}`);
       return username;
     }
     
+    this.logger.log(`extractInstagramUsernameFromLink: No match found for link: ${link}`);
     return null;
   }
 }

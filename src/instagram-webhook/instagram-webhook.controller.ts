@@ -92,6 +92,23 @@ export class InstagramWebhookController {
     }
   }
 
+  // Debug user mapping
+  @Get('debug-users')
+  async debugUserMapping() {
+    console.log('Debug user mapping endpoint called');
+    try {
+      const result = await this.taggedMediaService.debugUserMapping();
+      console.log('User mapping debug result:', result);
+      return result;
+    } catch (error) {
+      console.error('Error in debugUserMapping:', error);
+      throw new HttpException(
+        'Failed to debug user mapping',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   // --- 1. IG DM MESSAGE HANDLER ---
   @Post('messages')
   async handleMessages(@Body() body: any) {
