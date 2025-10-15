@@ -102,14 +102,14 @@ export class TaggedMediaService {
       };
 
       this.logger.log(`Testing Instagram connection to: ${url}`);
-      this.logger.log(`With params: ${JSON.stringify(params)}`);
+      this.logger.log(`With params: ${this.safeStringify(params)}`);
       
       const response = await lastValueFrom(
         this.httpService.get(url, { params })
       );
 
       this.logger.log(`Account info response status: ${response.status}`);
-      this.logger.log(`Account info response data: ${JSON.stringify(response.data, null, 2)}`);
+      this.logger.log(`Account info response data: ${this.safeStringify(response.data)}`);
 
       // Also test the tags endpoint to make sure it's accessible
       const tagsUrl = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/${this.INSTAGRAM_BUSINESS_ACCOUNT_ID}/tags`;
@@ -127,12 +127,12 @@ export class TaggedMediaService {
       this.logger.log(`Tags endpoint response data keys: ${Object.keys(tagsResponse.data || {})}`);
       
       if (tagsResponse.data) {
-        this.logger.log(`Tags endpoint response data sample: ${JSON.stringify({
+        this.logger.log(`Tags endpoint response data sample: ${this.safeStringify({
           ...tagsResponse.data,
           data: Array.isArray(tagsResponse.data.data) ? 
             `${tagsResponse.data.data.length} items` : 
             tagsResponse.data.data
-        }, null, 2)}`);
+        })}`);
       }
 
       return {
@@ -155,12 +155,12 @@ export class TaggedMediaService {
       
       if (error.response) {
         this.logger.error('Response status:', error.response.status);
-        this.logger.error('Response headers:', JSON.stringify(error.response.headers, null, 2));
-        this.logger.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        this.logger.error('Response headers:', this.safeStringify(error.response.headers));
+        this.logger.error('Response data:', this.safeStringify(error.response.data));
       }
       
       if (error.request) {
-        this.logger.error('Request data:', JSON.stringify(error.request, null, 2));
+        this.logger.error('Request object received (circular structure handled)');
       }
       
       return {
@@ -170,8 +170,10 @@ export class TaggedMediaService {
         errorMessage: error.message,
         errorCode: error.code,
         errorStack: error.stack,
-        errorResponse: error.response?.data,
-        errorStatus: error.response?.status
+        errorResponse: error.response ? {
+          status: error.response.status,
+          data: error.response.data
+        } : undefined
       };
     }
   }
@@ -195,11 +197,27 @@ export class TaggedMediaService {
       };
     } catch (error) {
       this.logger.error('Error debugging user mapping:', error.message);
+      this.logger.error('Error stack:', error.stack);
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        errorStack: error.stack
       };
     }
+  }
+
+  // Helper function to safely serialize objects with circular references
+  private safeStringify(obj: any, space: number = 2): string {
+    const seen = new WeakSet();
+    return JSON.stringify(obj, (key, val) => {
+      if (val !== null && typeof val === "object") {
+        if (seen.has(val)) {
+          return "[Circular]";
+        }
+        seen.add(val);
+      }
+      return val;
+    }, space);
   }
 
   // Run every hour to check for new tagged media
@@ -228,18 +246,18 @@ export class TaggedMediaService {
       };
 
       this.logger.log(`Making request to: ${url}`);
-      this.logger.log(`With params: ${JSON.stringify(params)}`);
+      this.logger.log(`With params: ${this.safeStringify(params)}`);
       
       const response = await lastValueFrom(
         this.httpService.get(url, { params })
       );
 
       this.logger.log(`Response status: ${response.status}`);
-      this.logger.log(`Response headers: ${JSON.stringify(response.headers)}`);
+      this.logger.log(`Response headers: ${this.safeStringify(response.headers)}`);
       this.logger.log(`Response data keys: ${Object.keys(response.data || {})}`);
       
       if (response.data) {
-        this.logger.log(`Response data: ${JSON.stringify(response.data, null, 2)}`);
+        this.logger.log(`Response data: ${this.safeStringify(response.data)}`);
       }
 
       // Check if response has the expected structure
@@ -249,7 +267,7 @@ export class TaggedMediaService {
           success: false,
           message: 'Response data is missing',
           responseStatus: response.status,
-          responseData: response.data
+          responseData: '[No Data]'
         };
       }
 
@@ -274,7 +292,7 @@ export class TaggedMediaService {
         message: `Successfully checked for tagged media. Found ${taggedMediaItems.length} items. Processed ${processedCount} items.`,
         count: taggedMediaItems.length,
         processed: processedCount,
-        rawData: response.data
+        rawData: '[Data not serialized for performance]'
       };
     } catch (error) {
       this.logger.error('Error checking for tagged media:');
@@ -285,12 +303,12 @@ export class TaggedMediaService {
       
       if (error.response) {
         this.logger.error('Response status:', error.response.status);
-        this.logger.error('Response headers:', JSON.stringify(error.response.headers, null, 2));
-        this.logger.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        this.logger.error('Response headers:', this.safeStringify(error.response.headers));
+        this.logger.error('Response data:', this.safeStringify(error.response.data));
       }
       
       if (error.request) {
-        this.logger.error('Request data:', JSON.stringify(error.request, null, 2));
+        this.logger.error('Request object received (circular structure handled)');
       }
       
       return {
@@ -300,8 +318,10 @@ export class TaggedMediaService {
         errorMessage: error.message,
         errorCode: error.code,
         errorStack: error.stack,
-        errorResponse: error.response?.data,
-        errorStatus: error.response?.status
+        errorResponse: error.response ? {
+          status: error.response.status,
+          data: error.response.data
+        } : undefined
       };
     }
   }
@@ -314,7 +334,7 @@ export class TaggedMediaService {
         return;
       }
       
-      this.logger.log(`Processing tagged media: ${JSON.stringify(media, null, 2)}`);
+      this.logger.log(`Processing tagged media: ${this.safeStringify(media)}`);
       
       // Check required fields
       if (!media.username) {
@@ -382,12 +402,12 @@ export class TaggedMediaService {
         this.logger.log(`No user found for Instagram username: ${media.username}`);
         // Log all users for debugging
         const allUsers = await this.userRepo.find();
-        this.logger.log(`All users in system: ${JSON.stringify(allUsers.map(u => ({
+        this.logger.log(`All users in system: ${this.safeStringify(allUsers.map(u => ({
           id: u.id,
           name: u.name,
           instagram: u.instagram,
           link: u.link
-        })), null, 2)}`);
+        })))}`);
       }
 
       const activity = new AmbassadorActivity();

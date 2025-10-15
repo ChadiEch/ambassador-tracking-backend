@@ -73,15 +73,22 @@ export class InstagramWebhookController {
       console.error('Error stack:', error.stack);
       
       // Return a more detailed error response instead of throwing HttpException
-      return {
+      // Make sure we don't include circular references
+      const errorResponse: any = {
         success: false,
         message: 'Failed to check for tagged media',
         error: {
           name: error.name || 'UnknownError',
-          message: error.message || 'An unknown error occurred',
-          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+          message: error.message || 'An unknown error occurred'
         }
       };
+      
+      // Only include stack trace in development
+      if (process.env.NODE_ENV === 'development') {
+        errorResponse.error.stack = error.stack;
+      }
+      
+      return errorResponse;
     }
   }
 
@@ -100,15 +107,22 @@ export class InstagramWebhookController {
       console.error('Error stack:', error.stack);
       
       // Return a more detailed error response instead of throwing HttpException
-      return {
+      // Make sure we don't include circular references
+      const errorResponse: any = {
         success: false,
         message: 'Failed to test Instagram connection',
         error: {
           name: error.name || 'UnknownError',
-          message: error.message || 'An unknown error occurred',
-          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+          message: error.message || 'An unknown error occurred'
         }
       };
+      
+      // Only include stack trace in development
+      if (process.env.NODE_ENV === 'development') {
+        errorResponse.error.stack = error.stack;
+      }
+      
+      return errorResponse;
     }
   }
 
@@ -127,15 +141,22 @@ export class InstagramWebhookController {
       console.error('Error stack:', error.stack);
       
       // Return a more detailed error response instead of throwing HttpException
-      return {
+      // Make sure we don't include circular references
+      const errorResponse: any = {
         success: false,
         message: 'Failed to debug user mapping',
         error: {
           name: error.name || 'UnknownError',
-          message: error.message || 'An unknown error occurred',
-          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+          message: error.message || 'An unknown error occurred'
         }
       };
+      
+      // Only include stack trace in development
+      if (process.env.NODE_ENV === 'development') {
+        errorResponse.error.stack = error.stack;
+      }
+      
+      return errorResponse;
     }
   }
 
