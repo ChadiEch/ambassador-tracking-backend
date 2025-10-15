@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { HttpModule } from '@nestjs/axios';
 import { MailerModule } from '@nestjs-modules/mailer';
@@ -20,23 +20,21 @@ import { AuthController } from './auth/auth.controller';
 
 import { WarningsModule } from './warnings/warnings.module';
 import { LoggingModule } from './logging/logging.module';
-import appConfig from './config/app.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-      load: [appConfig],
     }),
     ScheduleModule.forRoot(),
     HttpModule,
     TypeOrmModule.forRootAsync({
-      useFactory: (configService: ConfigService) => ({
+      useFactory: () => ({
         type: 'postgres',
-        url: configService.get<string>('database.url'),
+        url: process.env.database,
         autoLoadEntities: true,
-        synchronize: configService.get<string>('NODE_ENV') !== 'production',
+        synchronize: true,
         poolSize: 10,
         extra: {
           connectionLimit: 10,
@@ -44,24 +42,20 @@ import appConfig from './config/app.config';
           keepAlive: true,
         },
       }),
-      inject: [ConfigService],
     }),
-    MailerModule.forRootAsync({
-      useFactory: (configService: ConfigService) => ({
-        transport: {
-          host: configService.get<string>('mailer.host'),
-          port: configService.get<number>('mailer.port'),
-          secure: configService.get<boolean>('mailer.secure'),
-          auth: {
-            user: configService.get<string>('mailer.user'),
-            pass: configService.get<string>('mailer.password'),
-          },
+    MailerModule.forRoot({
+      transport: {
+        host: process.env.SMTP_HOST || 'smtp.yourprovider.com',
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: false,
+        auth: {
+          user: process.env.SMTP_USER || 'username',
+          pass: 'railway',
         },
-        defaults: {
-          from: configService.get<string>('mailer.from'),
-        },
-      }),
-      inject: [ConfigService],
+      },
+      defaults: {
+        from: '"Ambassador Tracking" <no-reply@yourdomain.com>',
+      },
     }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'docs'),
