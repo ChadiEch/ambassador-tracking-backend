@@ -75,6 +75,23 @@ export class InstagramWebhookController {
     }
   }
 
+  // Test Instagram API connection
+  @Get('test-connection')
+  async testInstagramConnection() {
+    console.log('Instagram connection test endpoint called');
+    try {
+      const result = await this.taggedMediaService.testInstagramConnection();
+      console.log('Connection test result:', result);
+      return result;
+    } catch (error) {
+      console.error('Error in testInstagramConnection:', error);
+      throw new HttpException(
+        'Failed to test Instagram connection',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   // --- 1. IG DM MESSAGE HANDLER ---
   @Post('messages')
   async handleMessages(@Body() body: any) {
