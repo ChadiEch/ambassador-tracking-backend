@@ -45,6 +45,12 @@ async function refreshToken() {
     if (error.response?.data?.error?.message) {
       console.error('Error details:', error.response.data.error.message);
     }
+    
+    console.log('\nNote: If your app has been deleted, you will need to:');
+    console.log('1. Create a new Facebook app at https://developers.facebook.com/');
+    console.log('2. Configure Instagram Basic Display product');
+    console.log('3. Generate a new short-lived token using Graph API Explorer');
+    console.log('4. Run this script again with the new credentials');
   }
 }
 

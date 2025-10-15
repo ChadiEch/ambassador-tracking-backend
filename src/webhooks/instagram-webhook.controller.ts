@@ -123,50 +123,17 @@ async handleWebhook(@Body() body: any) {
             console.error('❌ Error processing mention:', err.message);
           }
         }
-        // Handle tags in posts and reels
-        else if (change.field === 'tags') {
-          const mediaId = change.value.media_id;
-          // For tags, the user who is tagged is in the 'username' field
-          const taggedUsername = change.value.username;
-
-          console.log('Processing tag for:', taggedUsername, 'mediaId:', mediaId);
+        // Handle comments (can be used to detect potential tags)
+        else if (change.field === 'comments') {
+          const commentId = change.value.id;
+          const commenterUsername = change.value.from?.username;
+          const commentText = change.value.text;
           
-          try {
-            const media = await this.fetchMediaDetails(mediaId);
-            
-            console.log('Media details for tag:', JSON.stringify(media, null, 2));
-
-            // Check for duplicate media
-            const alreadyExists = await this.activityRepo.findOne({
-              where: { permalink: media.permalink },
-            });
-            if (alreadyExists) {
-              console.log('Skipping duplicate tag:', media.permalink);
-              continue; // Skip duplicate
-            }
-
-            // Find user by their Instagram username (the tagged user)
-            const user = await this.userRepo.findOne({
-              where: { instagram: taggedUsername },
-            });
-            
-            console.log('Found user for tag:', user?.id);
-
-            const activity = new AmbassadorActivity();
-            activity.mediaType = this.normalizeMediaType(media.media_type);
-            activity.permalink = media.permalink;
-            activity.timestamp = new Date(media.timestamp);
-            activity.userInstagramId = taggedUsername;
-            if (user) activity.user = user;
-
-            await this.activityRepo.save(activity);
-            console.log('✅ Tag saved for user:', taggedUsername);
-
-          } catch (err: any) {
-            console.error('❌ Error processing tag:', err.message);
-          }
-        } else {
-          console.log('Unknown field type:', change.field);
+          console.log('Processing comment from:', commenterUsername, 'commentId:', commentId);
+          console.log('Comment text:', commentText);
+          
+          // We can log comments but not process them as tags directly
+          // Tag detection will be handled by the scheduled task
         }
       }
     }
@@ -174,7 +141,6 @@ async handleWebhook(@Body() body: any) {
 
   return 'ok';
 }
-
 
   private async fetchMediaDetails(mediaId: string) {
     const url = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/${mediaId}`;

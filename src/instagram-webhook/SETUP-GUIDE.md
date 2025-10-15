@@ -85,8 +85,10 @@ This guide will help you set up Instagram webhooks from scratch for the Ambassad
 2. Select "Page" from the dropdown
 3. Subscribe to the following fields:
    - `mentions`
-   - `tags`
+   - `comments`
 4. Click "Save"
+
+Note: Instagram does not support "tags" as a direct webhook subscription field. Tag detection is handled through a scheduled task that periodically checks for tagged media.
 
 ## Step 8: Test the Setup
 
@@ -126,6 +128,17 @@ PAGE_ACCESS_TOKEN=your_long_lived_access_token
 META_VERIFY_TOKEN=ambassador123
 ```
 
+## Tag Detection
+
+Since Instagram does not support "tags" as a webhook subscription field, the system implements a scheduled task that:
+
+1. Runs every hour to check for new tagged media
+2. Uses the Instagram Graph API `/tags` endpoint
+3. Processes and saves tagged media activities
+4. Prevents duplicate processing
+
+Make sure the scheduled task is enabled in your application configuration.
+
 ## Troubleshooting
 
 ### Common Issues
@@ -156,3 +169,4 @@ META_VERIFY_TOKEN=ambassador123
 2. Your Instagram account must be a Business account
 3. Your Facebook Page must be connected to your Instagram Business account
 4. The webhook URL must be publicly accessible (localhost won't work)
+5. Tag detection requires a scheduled task, not webhooks

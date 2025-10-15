@@ -23,7 +23,7 @@ META_VERIFY_TOKEN=your_verify_token
 ## Setting up Webhooks
 
 1. **Subscribe to Webhook Events**
-   Run the setup script to subscribe to mentions and tags:
+   Run the setup script to subscribe to mentions and comments:
    ```bash
    npm run setup-webhooks
    ```
@@ -39,8 +39,40 @@ META_VERIFY_TOKEN=your_verify_token
 The system handles the following Instagram webhook events:
 
 1. **Mentions** - When someone mentions your Instagram Business Account in a post or story
-2. **Tags** - When someone tags your Instagram Business Account in a post or story
+2. **Comments** - When someone comments on your posts
 3. **Story Mentions** - When someone mentions your Instagram Business Account in a story
+
+## Tag Detection
+
+Instagram does not currently support "tags" as a direct webhook subscription field. According to Facebook's documentation, the valid subscription fields are:
+- comment_poll_response
+- comments
+- follow
+- live_comments
+- mentions
+- message_edit
+- message_reactions
+- messages
+- messaging_optins
+- messaging_postbacks
+- messaging_referral
+- messaging_seen
+- onboarding_welcome_message_series
+- share_to_story
+- standby
+- story_insights
+- story_poll_response
+
+### Scheduled Tag Detection
+
+To handle tags, the system implements a scheduled task that periodically checks for tagged media using the Instagram Graph API:
+
+- Runs every hour to check for new tagged media
+- Uses the `/tags` endpoint to fetch media where your account is tagged
+- Processes and saves tagged media activities
+- Prevents duplicate processing using permalink checks
+
+Make sure the scheduled task is enabled in your application configuration.
 
 ## Troubleshooting
 

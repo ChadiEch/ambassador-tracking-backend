@@ -7,6 +7,7 @@ import {
   Query,
   HttpException,
   HttpStatus,
+  Inject,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
@@ -16,6 +17,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { AmbassadorActivity } from '../entities/ambassador-activity.entity';
 import { InstagramMessage } from '../entities/instagram-message.entity';
 import { User } from 'src/users/entities/user.entity';
+import { TaggedMediaService } from './tagged-media.service';
 
 function mapToPluralKeys(obj: any) {
   return {
@@ -40,9 +42,28 @@ export class InstagramWebhookController {
     private readonly userRepo: Repository<User>,
     @InjectRepository(InstagramMessage)
     private readonly messageRepo: Repository<InstagramMessage>,
+    private readonly taggedMediaService: TaggedMediaService, // Inject the service
   ) {
     this.VERIFY_TOKEN = this.configService.get<string>('META_VERIFY_TOKEN') ?? '';
     this.PAGE_ACCESS_TOKEN = this.configService.get<string>('PAGE_ACCESS_TOKEN') ?? '';
+  }
+
+  // Manual trigger for checking tagged media (for testing purposes)
+  @Get('check-tags')
+  async manuallyCheckTags() {
+    try {
+      const result = await this.taggedMediaService.manuallyCheckForTaggedMedia();
+      return {
+        success: true,
+        message: 'Tag check completed',
+        data: result
+      };
+    } catch (error) {
+      throw new HttpException(
+        'Failed to check for tagged media',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   // --- 1. IG DM MESSAGE HANDLER ---
@@ -129,7 +150,7 @@ export class InstagramWebhookController {
           }
         }
 
-        // Standard IG mention and tag webhook
+        // Standard IG mention webhook
         const changes = entry.changes || [];
         for (const change of changes) {
           console.log('Processing change:', JSON.stringify(change, null, 2));
@@ -184,60 +205,17 @@ export class InstagramWebhookController {
               console.error('❌ Error processing mention:', err.message);
             }
           }
-          // Handle tags in posts and reels
-          else if (change.field === 'tags') {
-            const mediaId = change.value.media_id;
-            // For tags, the user who is tagged is in the 'username' field
-            const taggedUsername = change.value.username;
+          // Handle comments (can be used to detect potential tags)
+          else if (change.field === 'comments') {
+            const commentId = change.value.id;
+            const commenterUsername = change.value.from?.username;
+            const commentText = change.value.text;
             
-            console.log('Processing tag for:', taggedUsername, 'mediaId:', mediaId);
+            console.log('Processing comment from:', commenterUsername, 'commentId:', commentId);
+            console.log('Comment text:', commentText);
             
-            try {
-              // Retry mechanism for fetching media details
-              let media;
-              let retries = 3;
-              while (retries > 0) {
-                try {
-                  media = await this.fetchMediaDetails(mediaId);
-                  break;
-                } catch (error) {
-                  retries--;
-                  if (retries === 0) throw error;
-                  console.warn(`Retrying media fetch (${3 - retries}/3)`, error);
-                  await new Promise(resolve => setTimeout(resolve, 1000 * (4 - retries)));
-                }
-              }
-              
-              console.log('Media details for tag:', JSON.stringify(media, null, 2));
-              
-              const alreadyExists = await this.activityRepo.findOne({
-                where: { permalink: media.permalink },
-              });
-              if (alreadyExists) {
-                console.log('Skipping duplicate tag:', media.permalink);
-                continue;
-              }
-
-              // Find user by their Instagram username (the tagged user)
-              const user = await this.userRepo.findOne({
-                where: { instagram: taggedUsername },
-              });
-              
-              console.log('Found user for tag:', user?.id);
-
-              const activity = new AmbassadorActivity();
-              activity.mediaType = this.normalizeMediaType(media.media_type);
-              activity.permalink = media.permalink;
-              activity.timestamp = new Date(media.timestamp);
-              activity.userInstagramId = taggedUsername;
-              if (user) activity.user = user;
-              await this.activityRepo.save(activity);
-              console.log('✅ Tag saved for user:', taggedUsername);
-            } catch (err: any) {
-              console.error('❌ Error processing tag:', err.message);
-            }
-          } else {
-            console.log('Unknown field type:', change.field);
+            // We can log comments but not process them as tags directly
+            // Tag detection will be handled by the scheduled task
           }
         }
       }
@@ -249,44 +227,24 @@ export class InstagramWebhookController {
     return 'ok';
   }
 
-  // --- 3. VERIFY WEBHOOK ---
+  // Webhook verification endpoint
   @Get()
   verifyWebhook(
-    @Query('hub.verify_token') verifyToken: string,
+    @Query('hub.mode') mode: string,
     @Query('hub.challenge') challenge: string,
+    @Query('hub.verify_token') token: string,
   ) {
-    if (verifyToken === this.VERIFY_TOKEN) {
-      return challenge;
-    } else {
-      throw new HttpException('Invalid verify token', HttpStatus.BAD_REQUEST);
+    console.log('🔍 Webhook verification request received');
+    if (mode && token) {
+      if (mode === 'subscribe' && token === this.VERIFY_TOKEN) {
+        console.log('✅ Webhook verified successfully');
+        return challenge;
+      } else {
+        console.log('❌ Webhook verification failed');
+        throw new HttpException('Verification failed', HttpStatus.FORBIDDEN);
+      }
     }
-  }
-
-  // --- 4. GET ACTIVITIES ---
-  @Get('activities')
-  async getActivities(
-    @Query('user') userId: string,
-    @Query('type') type?: string,
-  ) {
-    const where: any = { userInstagramId: userId };
-    if (type) {
-      where.mediaType = type;
-    }
-    const activities = await this.activityRepo.find({
-      where,
-      order: { timestamp: 'DESC' },
-    });
-    return activities.map(mapToPluralKeys);
-  }
-
-  // --- 5. GET MESSAGES ---
-  @Get('messages')
-  async getMessages(@Query('user') userId: string) {
-    const messages = await this.messageRepo.find({
-      where: { senderId: userId },
-      order: { createdAt: 'DESC' },
-    });
-    return messages;
+    throw new HttpException('Missing parameters', HttpStatus.BAD_REQUEST);
   }
 
   private async fetchMediaDetails(mediaId: string) {

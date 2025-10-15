@@ -5,6 +5,7 @@ import { InstagramWebhookController } from './instagram-webhook.controller';
 import { AmbassadorActivity } from '../entities/ambassador-activity.entity';
 import { User } from '../users/entities/user.entity';
 import { InstagramMessage } from '../entities/instagram-message.entity';
+import { TaggedMediaService } from './tagged-media.service';
 
 @Module({
   imports: [
@@ -12,5 +13,7 @@ import { InstagramMessage } from '../entities/instagram-message.entity';
     TypeOrmModule.forFeature([AmbassadorActivity, User, InstagramMessage]),
   ],
   controllers: [InstagramWebhookController],
+  providers: [TaggedMediaService],
+  exports: [TaggedMediaService],
 })
 export class InstagramWebhookModule {}
