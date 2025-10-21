@@ -5,6 +5,15 @@
 
 import axios from 'axios';
 
+// Define the type for Instagram account information
+interface InstagramAccountInfo {
+  pageId: string;
+  pageName: string;
+  instagramAccountId: string;
+  instagramUsername: string;
+  instagramName: string;
+}
+
 // Replace these with your actual values
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN || 'YOUR_PAGE_ACCESS_TOKEN_HERE';
 const GRAPH_API_VERSION = 'v23.0';
@@ -26,7 +35,7 @@ async function findInstagramAccountId() {
     console.log(`✅ Response status: ${accountsResponse.status}\n`);
     
     // Look for Instagram Business Accounts in the response
-    const instagramAccounts = [];
+    const instagramAccounts: InstagramAccountInfo[] = [];
     if (accountsResponse.data?.data) {
       for (const account of accountsResponse.data.data) {
         if (account.instagram_business_account) {
