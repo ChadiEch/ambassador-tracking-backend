@@ -84,6 +84,12 @@ export class TaggedMediaService {
       errors.push('Page Access Token appears to be too short to be valid');
     }
     
+    // Check if the ID looks like a Facebook Page ID (common pattern)
+    if (this.INSTAGRAM_BUSINESS_ACCOUNT_ID && 
+        this.INSTAGRAM_BUSINESS_ACCOUNT_ID === '610997345440995') {
+      errors.push('The ID appears to be a Facebook Page ID, not an Instagram Business Account ID. Please use the correct Instagram Business Account ID.');
+    }
+    
     return {
       valid: errors.length === 0,
       errors,
@@ -116,6 +122,87 @@ export class TaggedMediaService {
     return this.checkForTaggedMedia();
   }
 
+  // Helper function to discover Instagram Business Account ID
+  async discoverInstagramAccountId() {
+    if (!this.PAGE_ACCESS_TOKEN) {
+      return {
+        success: false,
+        message: 'Missing Page Access Token'
+      };
+    }
+
+    try {
+      // Get all accounts associated with this access token
+      const accountsUrl = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/me/accounts`;
+      const accountsParams = {
+        access_token: this.PAGE_ACCESS_TOKEN,
+        fields: 'id,name,instagram_business_account{id,username,name}'
+      };
+
+      this.logger.log(`Discovering Instagram accounts: ${accountsUrl}`);
+      const accountsResponse = await lastValueFrom(
+        this.httpService.get(accountsUrl, { params: accountsParams })
+      );
+
+      this.logger.log(`Accounts discovery response status: ${accountsResponse.status}`);
+      this.logger.log(`Accounts discovery response data: ${this.safeStringify(accountsResponse.data)}`);
+
+      // Look for Instagram Business Accounts in the response
+      const instagramAccounts: any[] = [];
+      if (accountsResponse.data?.data) {
+        for (const account of accountsResponse.data.data) {
+          if (account.instagram_business_account) {
+            instagramAccounts.push({
+              pageId: account.id,
+              pageName: account.name,
+              instagramAccountId: account.instagram_business_account.id,
+              instagramUsername: account.instagram_business_account.username,
+              instagramName: account.instagram_business_account.name
+            });
+          }
+        }
+      }
+
+      if (instagramAccounts.length === 0) {
+        return {
+          success: false,
+          message: 'No Instagram Business Accounts found. Please make sure your Instagram account is properly connected to a Facebook Page and set up as a Business Account.',
+          accountsData: accountsResponse.data
+        };
+      }
+
+      return {
+        success: true,
+        message: `Found ${instagramAccounts.length} Instagram Business Account(s)`,
+        instagramAccounts: instagramAccounts
+      };
+    } catch (error) {
+      this.logger.error('Error discovering Instagram accounts:');
+      this.logger.error('Error name:', error.name);
+      this.logger.error('Error message:', error.message);
+      this.logger.error('Error code:', error.code);
+      this.logger.error('Error stack:', error.stack);
+      
+      if (error.response) {
+        this.logger.error('Response status:', error.response.status);
+        this.logger.error('Response headers:', this.safeStringify(error.response.headers));
+        this.logger.error('Response data:', this.safeStringify(error.response.data));
+      }
+      
+      return {
+        success: false,
+        message: 'Error discovering Instagram accounts',
+        errorName: error.name,
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorResponse: error.response ? {
+          status: error.response.status,
+          data: error.response.data
+        } : undefined
+      };
+    }
+  }
+
   // Public method to test Instagram credentials
   async testInstagramCredentials() {
     if (!this.PAGE_ACCESS_TOKEN || !this.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
@@ -143,6 +230,42 @@ export class TaggedMediaService {
     }
 
     try {
+      // First, let's get the list of all accounts associated with this access token
+      // This will help us discover the correct Instagram Business Account ID
+      const accountsUrl = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/me/accounts`;
+      const accountsParams = {
+        access_token: this.PAGE_ACCESS_TOKEN,
+        fields: 'id,name,instagram_business_account{id,username,name}'
+      };
+
+      this.logger.log(`Discovering accounts: ${accountsUrl}`);
+      const accountsResponse = await lastValueFrom(
+        this.httpService.get(accountsUrl, { params: accountsParams })
+      );
+
+      this.logger.log(`Accounts response status: ${accountsResponse.status}`);
+      this.logger.log(`Accounts response data: ${this.safeStringify(accountsResponse.data)}`);
+
+      // Look for Instagram Business Accounts in the response
+      let discoveredInstagramAccount = null;
+      if (accountsResponse.data?.data) {
+        for (const account of accountsResponse.data.data) {
+          if (account.instagram_business_account) {
+            discoveredInstagramAccount = account.instagram_business_account;
+            this.logger.log(`Discovered Instagram Business Account: ${this.safeStringify(discoveredInstagramAccount)}`);
+            break;
+          }
+        }
+      }
+
+      if (!discoveredInstagramAccount) {
+        return {
+          success: false,
+          message: 'No Instagram Business Account found. Please make sure your Instagram account is properly connected to a Facebook Page and set up as a Business Account.',
+          accountsData: accountsResponse.data
+        };
+      }
+
       // Test if the access token is valid by fetching the Instagram account info
       const accountInfoUrl = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/me`;
       const accountParams = {
@@ -175,7 +298,9 @@ export class TaggedMediaService {
       if (!instagramAccountId) {
         return {
           success: false,
-          message: 'Instagram Business Account ID not found. Please check that your Instagram account is properly connected to your Facebook Page.'
+          message: 'Instagram Business Account ID not found. Please check that your Instagram account is properly connected to your Facebook Page.',
+          discoveredAccount: discoveredInstagramAccount,
+          accountsData: accountsResponse.data
         };
       }
 
@@ -194,11 +319,37 @@ export class TaggedMediaService {
       this.logger.log(`Instagram response status: ${instagramResponse.status}`);
       this.logger.log(`Instagram response data: ${this.safeStringify(instagramResponse.data)}`);
 
+      // Also test the tags endpoint to make sure it's accessible
+      const tagsUrl = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/${instagramAccountId}/tags`;
+      const tagsParams = {
+        access_token: this.PAGE_ACCESS_TOKEN,
+        fields: 'id,media_type,permalink,timestamp,username',
+      };
+
+      this.logger.log(`Testing tags endpoint: ${tagsUrl}`);
+      const tagsResponse = await lastValueFrom(
+        this.httpService.get(tagsUrl, { params: tagsParams })
+      );
+
+      this.logger.log(`Tags endpoint response status: ${tagsResponse.status}`);
+      this.logger.log(`Tags endpoint response data keys: ${Object.keys(tagsResponse.data || {})}`);
+      
+      if (tagsResponse.data) {
+        this.logger.log(`Tags endpoint response data sample: ${this.safeStringify({
+          ...tagsResponse.data,
+          data: Array.isArray(tagsResponse.data.data) ? 
+            `${tagsResponse.data.data.length} items` : 
+            tagsResponse.data.data
+        })}`);
+      }
+
       return {
         success: true,
         message: 'Instagram credentials are valid',
         facebookAccount: accountResponse.data,
-        instagramAccount: instagramResponse.data
+        instagramAccount: instagramResponse.data,
+        discoveredAccount: discoveredInstagramAccount,
+        tagsEndpointAccessible: tagsResponse.status === 200
       };
     } catch (error) {
       this.logger.error('Error testing Instagram credentials:');
@@ -221,7 +372,12 @@ export class TaggedMediaService {
         
         // Provide specific guidance based on error code
         if (instagramError.code === 100) {
-          if (instagramError.error_subcode === 33) {
+          // Check if the error is related to accessing Instagram-specific fields on a Page node
+          if (instagramError.message && instagramError.message.includes('profile_picture_url') && instagramError.message.includes('Page')) {
+            errorMessage += ' - You are using a Facebook Page ID instead of an Instagram Business Account ID. Please use the correct Instagram Business Account ID.';
+          } else if (instagramError.message && instagramError.message.includes('tags') && instagramError.message.includes('Page')) {
+            errorMessage += ' - You are using a Facebook Page ID instead of an Instagram Business Account ID. The "tags" endpoint is only available for Instagram Business Accounts.';
+          } else if (instagramError.error_subcode === 33) {
             errorMessage += ' - The Instagram Business Account ID may be incorrect, the account may not exist, or you may not have proper permissions. Please verify your INSTAGRAM_IG_ID value.';
           } else {
             errorMessage += ' - This is a bad request error. Check your Instagram Business Account ID and access token.';
@@ -349,7 +505,10 @@ export class TaggedMediaService {
         
         // Provide specific guidance based on error code
         if (instagramError.code === 100) {
-          if (instagramError.error_subcode === 33) {
+          // Check if the error is related to accessing Instagram-specific fields on a Page node
+          if (instagramError.message && instagramError.message.includes('profile_picture_url') && instagramError.message.includes('Page')) {
+            errorMessage += ' - You are using a Facebook Page ID instead of an Instagram Business Account ID. Please use the correct Instagram Business Account ID.';
+          } else if (instagramError.error_subcode === 33) {
             errorMessage += ' - The Instagram Business Account ID may be incorrect, the account may not exist, or you may not have proper permissions. Please verify your INSTAGRAM_IG_ID value.';
           } else {
             errorMessage += ' - This is a bad request error. Check your Instagram Business Account ID and access token.';
@@ -541,7 +700,10 @@ export class TaggedMediaService {
         
         // Provide specific guidance based on error code
         if (instagramError.code === 100) {
-          if (instagramError.error_subcode === 33) {
+          // Check if the error is related to accessing Instagram-specific fields on a Page node
+          if (instagramError.message && instagramError.message.includes('tags') && instagramError.message.includes('Page')) {
+            errorMessage += ' - You are using a Facebook Page ID instead of an Instagram Business Account ID. The "tags" endpoint is only available for Instagram Business Accounts.';
+          } else if (instagramError.error_subcode === 33) {
             errorMessage += ' - The Instagram Business Account ID may be incorrect, the account may not exist, or you may not have proper permissions. Please verify your INSTAGRAM_IG_ID value.';
           } else {
             errorMessage += ' - This is a bad request error. Check your Instagram Business Account ID and access token.';
@@ -711,5 +873,134 @@ export class TaggedMediaService {
     
     this.logger.log(`extractInstagramUsernameFromLink: No match found for link: ${link}`);
     return null;
+  }
+
+  // Helper function to validate Instagram Business Account setup
+  async validateInstagramSetup() {
+    if (!this.PAGE_ACCESS_TOKEN) {
+      return {
+        success: false,
+        message: 'Missing Page Access Token'
+      };
+    }
+
+    try {
+      // Step 1: Get user info to verify access token
+      const meUrl = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/me`;
+      const meParams = {
+        access_token: this.PAGE_ACCESS_TOKEN,
+        fields: 'id,name'
+      };
+
+      this.logger.log(`Validating access token: ${meUrl}`);
+      const meResponse = await lastValueFrom(
+        this.httpService.get(meUrl, { params: meParams })
+      );
+
+      this.logger.log(`Me response status: ${meResponse.status}`);
+      this.logger.log(`Me response data: ${this.safeStringify(meResponse.data)}`);
+
+      // Step 2: Get accounts to find Facebook Pages
+      const accountsUrl = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/me/accounts`;
+      const accountsParams = {
+        access_token: this.PAGE_ACCESS_TOKEN,
+        fields: 'id,name,instagram_business_account{id,username,name,profile_picture_url}'
+      };
+
+      this.logger.log(`Getting accounts: ${accountsUrl}`);
+      const accountsResponse = await lastValueFrom(
+        this.httpService.get(accountsUrl, { params: accountsParams })
+      );
+
+      this.logger.log(`Accounts response status: ${accountsResponse.status}`);
+      this.logger.log(`Accounts response data: ${this.safeStringify(accountsResponse.data)}`);
+
+      // Step 3: Check if any account has an Instagram Business Account
+      const pagesWithInstagram: any[] = [];
+      if (accountsResponse.data?.data) {
+        for (const account of accountsResponse.data.data) {
+          if (account.instagram_business_account) {
+            pagesWithInstagram.push({
+              pageId: account.id,
+              pageName: account.name,
+              instagramAccount: account.instagram_business_account
+            });
+          }
+        }
+      }
+
+      // Step 4: If we have an Instagram Business Account ID configured, validate it
+      let configuredAccountValid = false;
+      let configuredAccountDetails: any = null;
+      
+      if (this.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
+        try {
+          const instagramUrl = `https://graph.facebook.com/${this.GRAPH_API_VERSION}/${this.INSTAGRAM_BUSINESS_ACCOUNT_ID}`;
+          const instagramParams = {
+            access_token: this.PAGE_ACCESS_TOKEN,
+            fields: 'id,username,name'
+          };
+
+          this.logger.log(`Validating configured Instagram account: ${instagramUrl}`);
+          const instagramResponse = await lastValueFrom(
+            this.httpService.get(instagramUrl, { params: instagramParams })
+          );
+
+          // Check if the response indicates we're accessing a Page instead of an Instagram account
+          if (instagramResponse.data && instagramResponse.data.category) {
+            // This is likely a Facebook Page, not an Instagram account
+            configuredAccountValid = false;
+            configuredAccountDetails = {
+              error: 'This appears to be a Facebook Page ID, not an Instagram Business Account ID',
+              pageData: instagramResponse.data
+            } as any;
+          } else {
+            configuredAccountValid = true;
+            configuredAccountDetails = instagramResponse.data;
+          }
+          this.logger.log(`Configured Instagram account validation status: ${instagramResponse.status}`);
+          this.logger.log(`Configured Instagram account data: ${this.safeStringify(instagramResponse.data)}`);
+        } catch (instagramError) {
+          this.logger.error('Error validating configured Instagram account:', instagramError);
+          configuredAccountValid = false;
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Instagram setup validation completed',
+        userId: meResponse.data.id,
+        userName: meResponse.data.name,
+        pagesWithInstagram: pagesWithInstagram,
+        configuredInstagramAccountId: this.INSTAGRAM_BUSINESS_ACCOUNT_ID,
+        configuredAccountValid: configuredAccountValid,
+        configuredAccountDetails: configuredAccountDetails,
+        hasInstagramBusinessAccounts: pagesWithInstagram.length > 0
+      };
+    } catch (error) {
+      this.logger.error('Error validating Instagram setup:');
+      this.logger.error('Error name:', error.name);
+      this.logger.error('Error message:', error.message);
+      this.logger.error('Error code:', error.code);
+      this.logger.error('Error stack:', error.stack);
+      
+      if (error.response) {
+        this.logger.error('Response status:', error.response.status);
+        this.logger.error('Response headers:', this.safeStringify(error.response.headers));
+        this.logger.error('Response data:', this.safeStringify(error.response.data));
+      }
+      
+      return {
+        success: false,
+        message: 'Error validating Instagram setup',
+        errorName: error.name,
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorResponse: error.response ? {
+          status: error.response.status,
+          data: error.response.data
+        } : undefined
+      };
+    }
   }
 }

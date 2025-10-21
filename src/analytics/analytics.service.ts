@@ -135,13 +135,13 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
       .getRawMany();
 
     const countMap: Record<string, number> = {
-      STORY: 0,
-      IMAGE: 0,
-      VIDEO: 0,
+      story: 0,
+      post: 0,
+      reel: 0,
     };
 
     for (const row of counts) {
-      countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
+      countMap[row.mediaType.toLowerCase()] = parseInt(row.count, 10);
     }
 
     // ✅ Get last activity timestamp for the user
@@ -161,9 +161,9 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
       active: user.active,
       edits: [], // if needed
       actual: {
-        stories: countMap.STORY,
-        posts: countMap.IMAGE,
-        reels: countMap.VIDEO,
+        stories: countMap.story,
+        posts: countMap.post,
+        reels: countMap.reel,
       },
       expected: {
         stories: globalRule?.stories_per_week ?? 3,
@@ -171,9 +171,9 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
         reels: globalRule?.reels_per_week ?? 1,
       },
       compliance: {
-        story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
-        post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
-        reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
+        story: countMap.story >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
+        post: countMap.post >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
+        reel: countMap.reel >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
       },
       // ✅ Add lastActivity field
       lastActivity: lastActivity?.timestamp || null,
@@ -199,8 +199,8 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
 
     for (const row of raw) {
       const month = row.month.toISOString().slice(0, 7);
-      const media = row.mediaType.toUpperCase();
-      result[month] ??= { STORY: 0, IMAGE: 0, VIDEO: 0, REEL: 0 };
+      const media = row.mediaType.toLowerCase();
+      result[month] ??= { story: 0, post: 0, reel: 0 };
       result[month][media] = parseInt(row.count, 10);
     }
 
@@ -229,17 +229,16 @@ async generateWeeklyCompliance(startDate?: Date, endDate?: Date): Promise<Ambass
       if (!row.teamId) continue;
       const teamId = row.teamId;
       const month = row.month.toISOString().slice(0, 7);
-      const media = row.mediaType.toUpperCase();
+      const media = row.mediaType.toLowerCase();
 
       result[teamId] ??= {};
-      result[teamId][month] ??= { STORY: 0, IMAGE: 0, VIDEO: 0, REEL: 0 };
+      result[teamId][month] ??= { story: 0, post: 0, reel: 0 };
       result[teamId][month][media] = parseInt(row.count, 10);
     }
 
     return result;
   }
 
-  
 async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]> {
   const teams = await this.teamRepo.find({ relations: ['members'] }); // 'members', not 'users'
   const results: { team: string; complianceRate: number }[] = [];
@@ -252,9 +251,9 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
         where: { user: { id: user.id } },
       });
 
-      const hasStory = activities.some(a => a.mediaType === 'story');
-      const hasPost = activities.some(a => a.mediaType === 'post');
-      const hasReel = activities.some(a => a.mediaType === 'reel');
+      const hasStory = activities.some(a => a.mediaType.toLowerCase() === 'story');
+      const hasPost = activities.some(a => a.mediaType.toLowerCase() === 'post');
+      const hasReel = activities.some(a => a.mediaType.toLowerCase() === 'reel');
 
       if (hasStory && hasPost && hasReel) {
         compliantUsers++;
@@ -289,18 +288,10 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
   for (const row of raw) {
     if (!row.teamId) continue;
     const teamId = row.teamId;
-    const media = row.mediaType.toUpperCase();
+    const media = row.mediaType.toLowerCase();
 
     resultMap[teamId] ??= {};
-    
-    // Map stored media types to expected keys
-    if (media === 'POST') {
-      resultMap[teamId]['IMAGE'] = parseInt(row.count, 10);
-    } else if (media === 'REEL') {
-      resultMap[teamId]['VIDEO'] = parseInt(row.count, 10);
-    } else {
-      resultMap[teamId][media] = parseInt(row.count, 10);
-    }
+    resultMap[teamId][media] = parseInt(row.count, 10);
   }
 
   const resultArray: TeamContribution[] = Object.entries(resultMap).map(
@@ -358,20 +349,20 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
       .getRawMany();
 
     const countMap: Record<string, number> = {
-      STORY: 0,
-      IMAGE: 0,
-      VIDEO: 0,
+      story: 0,
+      post: 0,
+      reel: 0,
     };
 
     for (const row of counts) {
-      countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
+      countMap[row.mediaType.toLowerCase()] = parseInt(row.count, 10);
     }
 
     return {
       actual: {
-        stories: countMap.STORY,
-        posts: countMap.IMAGE,
-        reels: countMap.VIDEO,
+        stories: countMap.story,
+        posts: countMap.post,
+        reels: countMap.reel,
       },
       expected: {
         stories: globalRule?.stories_per_week ?? 3,
@@ -379,9 +370,9 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
         reels: globalRule?.reels_per_week ?? 1,
       },
       compliance: {
-        story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
-        post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
-        reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
+        story: countMap.story >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
+        post: countMap.post >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
+        reel: countMap.reel >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
       },
     };
   }
@@ -416,9 +407,9 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
         .groupBy('a.mediaType')
         .getRawMany();
 
-      const countMap = { STORY: 0, IMAGE: 0, VIDEO: 0 };
+      const countMap = { story: 0, post: 0, reel: 0 };
       for (const row of counts) {
-        countMap[row.mediaType.toUpperCase()] = parseInt(row.count, 10);
+        countMap[row.mediaType.toLowerCase()] = parseInt(row.count, 10);
       }
 
       results.push({
@@ -429,9 +420,9 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
         active: member.user.active,
         edits: [],
         actual: {
-          stories: countMap.STORY,
-          posts: countMap.IMAGE,
-          reels: countMap.VIDEO,
+          stories: countMap.story,
+          posts: countMap.post,
+          reels: countMap.reel,
         },
         expected: {
           stories: globalRule?.stories_per_week ?? 3,
@@ -439,9 +430,9 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
           reels: globalRule?.reels_per_week ?? 1,
         },
         compliance: {
-          story: countMap.STORY >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
-          post: countMap.IMAGE >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
-          reel: countMap.VIDEO >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
+          story: countMap.story >= (globalRule?.stories_per_week ?? 3) ? 'green' : 'red',
+          post: countMap.post >= (globalRule?.posts_per_week ?? 1) ? 'green' : 'red',
+          reel: countMap.reel >= (globalRule?.reels_per_week ?? 1) ? 'green' : 'red',
         },
       });
     }
@@ -476,16 +467,16 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
     const grouped: Record<string, { stories: number; posts: number; reels: number }> = {};
     for (const row of result) {
       const month = row.month;
-      const media = row.mediaType.toUpperCase();
+      const media = row.mediaType.toLowerCase();
       const count = parseInt(row.count, 10);
 
       if (!grouped[month]) {
         grouped[month] = { stories: 0, posts: 0, reels: 0 };
       }
 
-      if (media === 'STORY') grouped[month].stories += count;
-      if (media === 'IMAGE') grouped[month].posts += count;
-      if (media === 'VIDEO') grouped[month].reels += count;
+      if (media === 'story') grouped[month].stories += count;
+      if (media === 'post') grouped[month].posts += count;
+      if (media === 'reel') grouped[month].reels += count;
     }
 
     return Object.entries(grouped).map(([month, counts]) => ({ month, ...counts }));
@@ -1018,21 +1009,21 @@ async getCompliancePerTeam(): Promise<{ team: string; complianceRate: number }[]
     for (const row of raw) {
       const month = row.month;
       const uid = row.userInstagramId;
-      const media = row.mediaType.toUpperCase();
+      const media = row.mediaType.toLowerCase();
       const count = parseInt(row.count, 10);
 
       if (!complianceMap[month]) complianceMap[month] = {};
       if (!complianceMap[month][uid]) complianceMap[month][uid] = 0;
 
       const rules = {
-        STORY: globalRule?.stories_per_week ?? 3,
-        IMAGE: globalRule?.posts_per_week ?? 1,
-        VIDEO: globalRule?.reels_per_week ?? 1,
+        story: globalRule?.stories_per_week ?? 3,
+        post: globalRule?.posts_per_week ?? 1,
+        reel: globalRule?.reels_per_week ?? 1,
       };
 
-      const meets = (media === 'STORY' && count >= rules.STORY)
-        || (media === 'IMAGE' && count >= rules.IMAGE)
-        || (media === 'VIDEO' && count >= rules.VIDEO);
+      const meets = (media === 'story' && count >= rules.story)
+        || (media === 'post' && count >= rules.post)
+        || (media === 'reel' && count >= rules.reel);
 
       if (meets) {
         complianceMap[month][uid]++;

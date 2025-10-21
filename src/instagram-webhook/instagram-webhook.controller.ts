@@ -210,6 +210,74 @@ export class InstagramWebhookController {
     }
   }
 
+  // Discover Instagram Business Account ID
+  @Get('discover-instagram')
+  async discoverInstagramAccountId() {
+    console.log('Instagram account discovery endpoint called');
+    try {
+      const result = await this.taggedMediaService.discoverInstagramAccountId();
+      console.log('Account discovery result:', result);
+      return result;
+    } catch (error) {
+      console.error('Error in discoverInstagramAccountId:', error);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      // Return a more detailed error response instead of throwing HttpException
+      // Make sure we don't include circular references
+      const errorResponse: any = {
+        success: false,
+        message: 'Failed to discover Instagram accounts',
+        error: {
+          name: error.name || 'UnknownError',
+          message: error.message || 'An unknown error occurred'
+        }
+      };
+      
+      // Only include stack trace in development
+      if (process.env.NODE_ENV === 'development') {
+        errorResponse.error.stack = error.stack;
+      }
+      
+      return errorResponse;
+    }
+  }
+
+  // Validate Instagram setup
+  @Get('validate-instagram-setup')
+  async validateInstagramSetup() {
+    console.log('Instagram setup validation endpoint called');
+    try {
+      const result = await this.taggedMediaService.validateInstagramSetup();
+      console.log('Setup validation result:', result);
+      return result;
+    } catch (error) {
+      console.error('Error in validateInstagramSetup:', error);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      // Return a more detailed error response instead of throwing HttpException
+      // Make sure we don't include circular references
+      const errorResponse: any = {
+        success: false,
+        message: 'Failed to validate Instagram setup',
+        error: {
+          name: error.name || 'UnknownError',
+          message: error.message || 'An unknown error occurred'
+        }
+      };
+      
+      // Only include stack trace in development
+      if (process.env.NODE_ENV === 'development') {
+        errorResponse.error.stack = error.stack;
+      }
+      
+      return errorResponse;
+    }
+  }
+
   // --- 1. IG DM MESSAGE HANDLER ---
   @Post('messages')
   async handleMessages(@Body() body: any) {

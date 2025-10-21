@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "setup-webhooks": "ts-node src/instagram-webhook/setup-webhooks.ts",
     "check-webhooks": "ts-node src/instagram-webhook/check-webhook-subscription.ts",
-    "refresh-token": "ts-node src/instagram-webhook/refresh-token.ts"
+    "refresh-token": "ts-node src/instagram-webhook/refresh-token.ts",
+    "find-instagram-id": "ts-node src/instagram-webhook/find-instagram-id.ts"
   },
   "dependencies": {
     "@nestjs-modules/mailer": "^1.11.2",
