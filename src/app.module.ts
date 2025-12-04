@@ -20,6 +20,7 @@ import { AuthController } from './auth/auth.controller';
 
 import { WarningsModule } from './warnings/warnings.module';
 import { LoggingModule } from './logging/logging.module';
+import { ManualActivityModule } from './manual-activity/manual-activity.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { LoggingModule } from './logging/logging.module';
     AnalyticsModule,
     FeedbackFormsModule,
     WarningsModule,
+    ManualActivityModule,
   ],
   controllers: [AuthController],
   providers: [],
